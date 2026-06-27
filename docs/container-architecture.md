@@ -114,7 +114,7 @@ winforge build examples/minimal.winforge.json --dry-run
 
 When a manifest is resolved, `RuntimeBinding.oci_image` contains the published GHCR image reference and `RuntimeBinding.local_oci_image` contains the local developer tag. Both are produced from `runtime/catalog.json` through `runtime/providers.py`.
 
-The `plan` and `build` CLI commands automatically resolve the catalog-backed OCI image reference and include it in their output.
+The `plan` and `build` CLI commands automatically resolve the catalog-backed OCI image reference and include it in their output. `build` also writes `metadata/graph.json` so later `run`/OCI/kube commands can consume the resolved runtime and launch contract without reinterpreting the manifest.
 
 ## Consumption by VIC (future)
 

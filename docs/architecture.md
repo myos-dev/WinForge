@@ -21,11 +21,12 @@ A v0 execution bundle is a sealed filesystem artifact:
   runtime/runtime.json
   launch/entrypoint.json
   metadata/provenance.json
+  metadata/graph.json
   build/build-plan.json
   logs/build.log
 ```
 
-It includes prefix, runtime binding, manifest, launch definition, metadata, hashes/provenance, and logs.
+It includes prefix, runtime binding, manifest, launch definition, metadata, hashes/provenance, logs, and `metadata/graph.json` as the resolved execution graph.
 
 ### 2. Manifest schema v0
 
@@ -39,7 +40,11 @@ Providers are pluggable through `runtime/catalog.json`; active v0 providers are 
 
 The deterministic pipeline is `init-prefix`, `install-dependencies`, `install-apps`, `apply-layout-and-registry`, `validate`, and `seal-artifact`.
 
-### 5. Kubernetes / OCI integration
+### 5. Execution graph
+
+`metadata/graph.json` is first-class bundle output. It is the bridge from manifest authoring to Ramalama-like `winforge run`: runtime image selection, bundle artifact identity, launch contract, graphics modes, and exact-runtime compatibility live in one deterministic graph.
+
+### 6. Kubernetes / OCI integration
 
 WinForge supports OCI output for distribution and Kubernetes execution as a downstream substrate, but WinForge must not depend on Kubernetes internally.
 

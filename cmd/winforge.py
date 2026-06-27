@@ -64,6 +64,7 @@ def cmd_build(args):
                               output_tag=args.image_tag)
         result = {
             "bundle": str(bundle_path),
+            "graph": str(bundle_path / "metadata" / "graph.json"),
             "dryRun": True,
             "baseImage": base_image,
             "ociImage": oci["outputTag"],
@@ -98,6 +99,7 @@ def cmd_build(args):
 
     result = {
         "bundle": str(bundle_path),
+        "graph": str(bundle_path / "metadata" / "graph.json"),
         "dryRun": False,
         "baseImage": base_image,
         "ociImage": oci["outputTag"],

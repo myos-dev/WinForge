@@ -47,7 +47,7 @@ manifest.winforge.json
 ┌──────────────────────────────────────────────┐
 │         Immutable Execution Bundle             │
 │  prefix/ │ runtime/ │ launch/ │ metadata/     │
-│  (sealed, read-only, deployable)              │
+│  metadata/graph.json is the resolved run graph │
 └──────────────────────────────────────────────┘
        │
        ▼
@@ -66,7 +66,7 @@ winforge inspect examples/minimal.winforge.json
 # Print the build plan
 winforge plan examples/minimal.winforge.json
 
-# Dry-run build (creates bundle contract without executing Wine)
+# Dry-run build (creates bundle contract + metadata/graph.json without executing Wine)
 winforge build examples/minimal.winforge.json --dry-run
 
 # Build for real (requires a runtime container image)
@@ -162,6 +162,7 @@ WinForge/
 │   └── providers/               # Dockerfiles per runtime provider
 ├── artifact/
 │   ├── bundle.py                # Bundle writer (sealed artifact)
+│   ├── graph.py                 # Resolved execution graph writer
 │   ├── oci.py                   # OCI image mapping & layering
 │   └── exporter.py              # Bundle export utilities
 ├── tests/                       # Unit tests

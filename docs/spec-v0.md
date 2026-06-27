@@ -34,7 +34,11 @@ Mappings copy declared source files into Windows-style targets under `drive_c`.
 
 ## Bundle layout
 
-A v0 bundle must contain `manifest.winforge.json`, `prefix/drive_c/`, `runtime/runtime.json`, `launch/entrypoint.json`, `metadata/provenance.json`, `build/build-plan.json`, and `logs/build.log`.
+A v0 bundle must contain `manifest.winforge.json`, `prefix/drive_c/`, `runtime/runtime.json`, `launch/entrypoint.json`, `metadata/provenance.json`, `metadata/graph.json`, `build/build-plan.json`, and `logs/build.log`.
+
+## Execution graph
+
+`metadata/graph.json` is the resolved execution contract. It records the application identity, resolved builder runtime, resolved runner runtime, supported graphics modes, launch contract, exact-runtime compatibility policy, and deterministic nodes/edges for the build phases and produced bundle artifact. The graph separates the runtime OCI image from the application/prefix artifact so future `winforge run` can pull a runtime image and a workload artifact independently.
 
 ## OCI mapping
 

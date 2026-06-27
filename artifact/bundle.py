@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json, re
 from pathlib import Path
+from artifact.graph import build_execution_graph
 from builder.pipeline import build_plan
 from core.manifest import Manifest
 from runtime.providers import resolve_runtime
@@ -27,6 +28,8 @@ def create_bundle(manifest: Manifest, output_dir: Path, *,
                 manifest.launch.to_dict())
     _write_json(bundle_path / "build/build-plan.json",
                 {"phases": build_plan(manifest)})
+    _write_json(bundle_path / "metadata/graph.json",
+                build_execution_graph(manifest))
 
     # Provenance differs for dry-run vs. real builds.
     if dry_run:

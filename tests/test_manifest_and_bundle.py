@@ -20,6 +20,6 @@ class ManifestAndBundleTests(unittest.TestCase):
     def test_dry_run_bundle_writes_contract_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = create_bundle(Manifest.from_dict(VALID), Path(tmp), dry_run=True)
-            for rel in ["manifest.winforge.json","runtime/runtime.json","launch/entrypoint.json","metadata/provenance.json","build/build-plan.json"]:
+            for rel in ["manifest.winforge.json","runtime/runtime.json","launch/entrypoint.json","metadata/provenance.json","metadata/graph.json","build/build-plan.json"]:
                 self.assertTrue((path/rel).exists(), rel)
 if __name__ == "__main__": unittest.main()
