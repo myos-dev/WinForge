@@ -23,7 +23,7 @@ RUN set -eux; \
     apt-get update -qq; \
     apt-get install -y -qq --no-install-recommends \
         ca-certificates curl gnupg software-properties-common \
-        xvfb x11-utils xauth \
+        xvfb x11-utils xauth x11vnc websockify novnc \
         cabextract p7zip-full unzip bzip2 xz-utils \
         fontconfig \
         # Build / scripting

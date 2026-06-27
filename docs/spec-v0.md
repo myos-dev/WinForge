@@ -46,6 +46,16 @@ A v0 bundle must contain `manifest.winforge.json`, `prefix/drive_c/`, `runtime/r
 
 `winforge bundle verify <bundle>` validates the v0 bundle contract and exits `0` only when the bundle is valid. Verification checks required files, JSON parseability, manifest/provenance/graph schema versions, graph application identity, runtime consistency across `runtime/runtime.json`, `builderRuntime`, and `runnerRuntime`, launch consistency, exact-runtime compatibility policy, graphics support for `headless` and `vnc`, and required graph nodes.
 
+## Bundle run contract
+
+`winforge run <bundle>` consumes a verified bundle and must fail before container planning when `winforge bundle verify <bundle>` would fail. It does not reinterpret the original manifest as the source of truth; it reads `metadata/graph.json` for the resolved `runnerRuntime`, launch contract, graphics modes, and exact-runtime compatibility policy.
+
+`winforge run --dry-run <bundle>` prints a `winforge.run-plan/v0` document containing the selected runtime image, graphics mode, launch command, container environment, and container argv without starting the container.
+
+`--graphics headless` runs through the runtime image Xvfb entrypoint without publishing ports. `--graphics vnc` publishes loopback-only VNC and noVNC/websockify ports (`127.0.0.1:<vnc-port>:5900` and `127.0.0.1:<novnc-port>:6080`) and starts `x11vnc` plus `websockify` inside the container.
+
+The v0 runner mounts the bundle read-only at `/opt/winforge/bundle`, copies `prefix/` to `/tmp/winforge-prefix`, sets `WINEPREFIX` to that copy, then launches the graph entrypoint. This preserves the sealed bundle while allowing Wine to mutate runtime prefix state.
+
 ## OCI mapping
 
 A bundle may be copied into an OCI image at `/opt/winforge/bundle`. OCI is a distribution wrapper, not the core artifact contract.

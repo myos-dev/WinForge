@@ -78,9 +78,38 @@ winforge bundle inspect dist/notepad-plus-plus-portable-0.1.0
 # Verify bundle contract + metadata/graph.json consistency
 winforge bundle verify dist/notepad-plus-plus-portable-0.1.0
 
+# Preview the container invocation without starting Wine
+winforge run --dry-run --graphics headless dist/notepad-plus-plus-portable-0.1.0
+
+# Run headless, or expose loopback VNC/noVNC for visible execution
+winforge run --graphics headless dist/notepad-plus-plus-portable-0.1.0
+winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/notepad-plus-plus-portable-0.1.0
+
 # List available runtime providers
 winforge providers
 ```
+
+## Running Bundles
+
+`winforge run` consumes a verified bundle, not the original manifest. The
+command reads `metadata/graph.json`, verifies the bundle contract, selects the
+graph-resolved `runnerRuntime.image`, and launches the graph-resolved entrypoint
+inside the catalog runtime container.
+
+```bash
+# Machine-readable run plan only
+winforge run --dry-run --graphics headless dist/my-app-1.0.0
+
+# Headless execution through the runtime image's Xvfb entrypoint
+winforge run --graphics headless dist/my-app-1.0.0
+
+# Visible execution with loopback-only VNC and noVNC/websockify ports
+winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/my-app-1.0.0
+```
+
+For v0, the bundle is mounted read-only at `/opt/winforge/bundle`; the prefix
+is copied to `/tmp/winforge-prefix` before launch so normal Wine runtime
+mutation does not alter the sealed bundle artifact.
 
 ## WinForge WINE Container
 
@@ -156,6 +185,7 @@ WinForge/
 ├── runtime/
 │   ├── catalog.json             # Supported runtime catalog (CI + Forge source of truth)
 │   ├── catalog.py               # Catalog loader + CI matrix generator
+│   ├── launcher.py              # Verified bundle run planning/execution
 │   └── providers.py             # Catalog-backed provider resolution + OCI image binding
 ├── builder/
 │   ├── pipeline.py              # Build phase orchestration

@@ -20,6 +20,7 @@ from container.manager import (
 )
 from core.manifest import ManifestError, RuntimeSpec, load_manifest
 from runtime.providers import list_providers, resolve_runtime
+from runtime.launcher import RunError, build_run_plan, execute_run_plan
 
 
 # ---- manifest commands ----
@@ -126,6 +127,26 @@ def cmd_build(args):
     return 0
 
 
+# ---- run command ----
+
+def cmd_run(args):
+    plan = build_run_plan(
+        Path(args.bundle),
+        graphics=args.graphics,
+        engine=args.engine,
+        vnc_port=args.vnc_port,
+        novnc_port=args.novnc_port,
+        container_name=args.name,
+    )
+    if args.dry_run:
+        print(json.dumps(plan, indent=2, sort_keys=True))
+        return 0
+
+    result = execute_run_plan(plan, timeout=args.timeout)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result.get("success") else int(result.get("exitCode") or 1)
+
+
 # ---- container commands ----
 
 
@@ -230,6 +251,24 @@ def build_parser():
                    help="Optional OCI output tag (e.g. myapp:latest)")
     p.set_defaults(func=cmd_build)
 
+    # run
+    p = sub.add_parser("run", help="Run a verified WinForge execution bundle")
+    p.add_argument("bundle", help="Path to WinForge bundle directory")
+    p.add_argument("--graphics", choices=["headless", "vnc"],
+                   help="Graphics mode; defaults to metadata/graph.json defaultMode")
+    p.add_argument("--engine", default=None,
+                   help="Container engine (podman, docker). Auto-detect if omitted.")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Print the run plan without starting the container")
+    p.add_argument("--vnc-port", type=int, default=5900,
+                   help="Host loopback VNC port for --graphics vnc")
+    p.add_argument("--novnc-port", type=int, default=6080,
+                   help="Host loopback noVNC/websockify port for --graphics vnc")
+    p.add_argument("--name", help="Optional container name")
+    p.add_argument("--timeout", type=int, default=None,
+                   help="Optional max seconds for the run process")
+    p.set_defaults(func=cmd_run)
+
     # container
     p = sub.add_parser("container", help="Manage WinForge runtime OCI containers")
     csub = p.add_subparsers(dest="container_command", required=True)
@@ -288,6 +327,9 @@ def main(argv=None):
     except FileExistsError as exc:
         print(f"winforge: artifact exists: {exc}", file=sys.stderr)
         return 3
+    except RunError as exc:
+        print(f"winforge: run error: {exc}", file=sys.stderr)
+        return 4
     except KeyboardInterrupt:
         print("", file=sys.stderr)
         return 130

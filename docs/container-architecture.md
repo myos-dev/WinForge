@@ -6,6 +6,7 @@ WinForge runtime provider containers are the **OCI execution substrate** for Win
 
 - The Wine/Proton-family runtime binaries
 - Xvfb for headless display emulation (required by many Windows installers)
+- x11vnc, websockify, and noVNC assets for `winforge run --graphics vnc`
 - Helper tools (winetricks, cabextract, 7zip, etc.)
 - The WinForge entrypoint chain
 
@@ -25,7 +26,7 @@ These images are the **base layer** on which WinForge builds prefixes, installs 
 │  wineboot init, drive_c, registry hive        │    builder pipeline
 ├──────────────────────────────────────────────┤
 │          WinForge Runtime Base                │  ← This repo's container
-│ Wine/Proton-GE + Xvfb + tools + entrypoints   │    (Dockerfiles)
+│ Wine/Proton-GE + Xvfb/VNC + tools/entrypoints  │    (Dockerfiles)
 ├──────────────────────────────────────────────┤
 │          Base OS Layer                        │  ← Debian Bookworm Slim
 │  libc, libstdc++, basic runtime deps          │
@@ -85,7 +86,11 @@ The entrypoint in every image is `xvfb-entrypoint.sh`:
 2. Wait for X server readiness (up to 3 seconds)
 3. Set `WINEPREFIX`, `WINEDLLOVERRIDES`, `WINEARCH`
 4. Create prefix directory if `WINEFS=builder`
-5. Execute the provided command (or keep Xvfb alive)
+5. Execute the provided command (builder or `winforge run` launcher script)
+
+For `winforge run --graphics vnc`, the launcher script starts `x11vnc` against
+the Xvfb display and starts `websockify` for browser/noVNC access. Ports are
+published on host loopback only by default.
 
 ## CLI Integration
 
@@ -112,13 +117,18 @@ winforge build examples/minimal.winforge.json --dry-run
 # Inspect and verify bundle contract before run/export/kube generation
 winforge bundle inspect dist/notepad-plus-plus-portable-0.1.0
 winforge bundle verify dist/notepad-plus-plus-portable-0.1.0
+
+# Preview and execute a verified bundle
+winforge run --dry-run --graphics headless dist/notepad-plus-plus-portable-0.1.0
+winforge run --graphics headless dist/notepad-plus-plus-portable-0.1.0
+winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/notepad-plus-plus-portable-0.1.0
 ```
 
 ## Runtime Binding
 
 When a manifest is resolved, `RuntimeBinding.oci_image` contains the published GHCR image reference and `RuntimeBinding.local_oci_image` contains the local developer tag. Both are produced from `runtime/catalog.json` through `runtime/providers.py`.
 
-The `plan` and `build` CLI commands automatically resolve the catalog-backed OCI image reference and include it in their output. `build` also writes `metadata/graph.json` so later `run`/OCI/kube commands can consume the resolved runtime and launch contract without reinterpreting the manifest.
+The `plan` and `build` CLI commands automatically resolve the catalog-backed OCI image reference and include it in their output. `build` also writes `metadata/graph.json` so later `run`/OCI/kube commands can consume the resolved runtime and launch contract without reinterpreting the manifest. `winforge run` consumes that graph, verifies exact runtime consistency, mounts the bundle read-only, copies the prefix to an ephemeral runtime prefix, and launches through the catalog-resolved runtime image.
 
 ## Consumption by VIC (future)
 
