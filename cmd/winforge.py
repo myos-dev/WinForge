@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
 
 from artifact.bundle import create_bundle
 from artifact.oci import build_oci_image
+from builder.executor import execute_inside_container
 from builder.pipeline import build_plan
 from container.manager import (
     build_container,
@@ -21,6 +22,7 @@ from runtime.providers import list_providers, resolve_runtime
 
 
 # ---- manifest commands ----
+
 
 def cmd_inspect(args):
     manifest = load_manifest(Path(args.manifest))
@@ -50,22 +52,76 @@ def cmd_build(args):
     bundle_path = create_bundle(
         manifest, Path(args.output), dry_run=args.dry_run,
     )
+
     base_image = get_image_ref(manifest.runtime.provider,
                                manifest.runtime.version)
+
+    if args.dry_run:
+        oci = build_oci_image(bundle_path, base_image,
+                              output_tag=args.image_tag)
+        result = {
+            "bundle": str(bundle_path),
+            "dryRun": True,
+            "baseImage": base_image,
+            "ociImage": oci["outputTag"],
+            "ociMapping": oci,
+            "status": "dry-run — no Wine commands executed",
+        }
+        print(json.dumps(result, indent=2))
+        return 0
+
+    # ---- Real execution inside container ----
+    print(f"[winforge] Starting real build in container ({base_image})...",
+          file=sys.stderr)
+    sys.stderr.flush()
+
+    build_result = execute_inside_container(
+        manifest,
+        bundle_path,
+        engine=args.engine,
+        image_ref=base_image,
+        timeout=args.build_timeout,
+    )
+
+    # Write build result to bundle metadata
+    (bundle_path / "metadata" / "execution-result.json").write_text(
+        json.dumps(build_result.to_dict(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    # Write OCI mapping
     oci = build_oci_image(bundle_path, base_image,
                           output_tag=args.image_tag)
+
     result = {
         "bundle": str(bundle_path),
-        "dryRun": args.dry_run,
+        "dryRun": False,
         "baseImage": base_image,
         "ociImage": oci["outputTag"],
         "ociMapping": oci,
+        "execution": build_result.to_dict(),
     }
+
     print(json.dumps(result, indent=2))
+
+    if build_result.success:
+        print(f"\n[winforge] Build SUCCESS — bundle at {bundle_path}",
+              file=sys.stderr)
+        if build_result.prefix_size is not None:
+            size_mb = build_result.prefix_size / (1024 * 1024)
+            print(f"[winforge] Prefix: {size_mb:.1f} MB, "
+                  f"{build_result.prefix_file_count} files",
+                  file=sys.stderr)
+    else:
+        print(f"\n[winforge] Build FAILED — see {bundle_path}/logs/build.log",
+              file=sys.stderr)
+        return 1
+
     return 0
 
 
 # ---- container commands ----
+
 
 def cmd_container_list(args):
     print(json.dumps(list_definitions(), indent=2))
@@ -89,6 +145,7 @@ def cmd_container_ref(args):
 
 
 # ---- provider commands ----
+
 
 def cmd_providers(args):
     providers = list_providers()
@@ -115,6 +172,7 @@ def cmd_providers(args):
 
 # ---- parser ----
 
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="winforge",
@@ -130,17 +188,23 @@ def build_parser():
 
     # plan
     p = sub.add_parser("plan", help="Print deterministic builder phases "
-                                     "with OCI image reference")
+                                    "with OCI image reference")
     p.add_argument("manifest")
     p.set_defaults(func=cmd_plan)
 
     # build
-    p = sub.add_parser("build", help="Create an immutable execution bundle")
+    p = sub.add_parser("build", help="Create an immutable execution bundle "
+                                     "(dry-run or real via container)")
     p.add_argument("manifest")
     p.add_argument("--output", default="dist",
                    help="Output directory")
     p.add_argument("--dry-run", action="store_true",
                    help="Record contract without executing Wine commands")
+    p.add_argument("--engine", default=None,
+                   help="Container engine (docker, podman). "
+                        "Auto-detect if omitted.")
+    p.add_argument("--build-timeout", type=int, default=600,
+                   help="Max seconds for container build (default: 600)")
     p.add_argument("--image-tag",
                    help="Optional OCI output tag (e.g. myapp:latest)")
     p.set_defaults(func=cmd_build)
