@@ -16,7 +16,7 @@ class ContainerManagerTests(unittest.TestCase):
         names = [d["name"] for d in defs]
         self.assertIn("wine", names)
         self.assertIn("staging", names)
-        self.assertIn("proton", names)
+        self.assertNotIn("proton", names)
         self.assertIn("proton-ge", names)
 
     def test_get_image_ref_known_provider_returns_published_ref(self):
@@ -24,8 +24,6 @@ class ContainerManagerTests(unittest.TestCase):
                          "ghcr.io/myos-dev/winforge-wine:9.0")
         self.assertEqual(get_image_ref("staging", "9.0"),
                          "ghcr.io/myos-dev/winforge-wine-staging:9.0")
-        self.assertEqual(get_image_ref("proton", "10.0-4"),
-                         "ghcr.io/myos-dev/winforge-proton:10.0-4")
         self.assertEqual(get_image_ref("proton-ge", "GE-Proton9-27"),
                          "ghcr.io/myos-dev/winforge-proton-ge:GE-Proton9-27")
 
@@ -60,7 +58,7 @@ class RuntimeCatalogTests(unittest.TestCase):
         matrix = ci_matrix()
         self.assertIn("include", matrix)
         providers = {entry["provider"] for entry in matrix["include"]}
-        self.assertEqual(providers, {"wine", "staging", "proton", "proton-ge"})
+        self.assertEqual(providers, {"wine", "staging", "proton-ge"})
         for entry in matrix["include"]:
             self.assertIn("dockerfile", entry)
             self.assertIn("build_arg", entry)
@@ -76,13 +74,9 @@ class RuntimeCatalogTests(unittest.TestCase):
         self.assertEqual(entry.published_ref,
                          "ghcr.io/myos-dev/winforge-wine:9.0")
 
-    def test_valve_proton_catalog_marks_source_seed_not_runtime_usable(self):
+    def test_valve_proton_is_not_active_provider(self):
         from runtime.catalog import resolve_catalog_version
-        entry = resolve_catalog_version("proton", "default")
-        self.assertIsNotNone(entry)
-        assert entry is not None
-        self.assertEqual(entry.version, "10.0-4")
-        self.assertFalse(entry.runtime_usable)
+        self.assertIsNone(resolve_catalog_version("proton", "default"))
 
 
 class RuntimeProviderOCITests(unittest.TestCase):
@@ -125,14 +119,14 @@ class RuntimeProviderOCITests(unittest.TestCase):
         from core.manifest import RuntimeSpec
         from runtime.providers import resolve_runtime
         binding = resolve_runtime(RuntimeSpec(
-            provider="proton", version="default",
+            provider="proton-ge", version="GE-Proton9-27",
         ))
         d = binding.to_dict()
         self.assertIn("ociImage", d)
         self.assertIn("localOciImage", d)
         self.assertEqual(d["ociImage"],
-                         "ghcr.io/myos-dev/winforge-proton:10.0-4")
-        self.assertFalse(d["runtimeUsable"])
+                         "ghcr.io/myos-dev/winforge-proton-ge:GE-Proton9-27")
+        self.assertTrue(d["runtimeUsable"])
 
     def test_to_dict_omits_none_oci(self):
         """Custom providers without OCI mapping should omit the field."""

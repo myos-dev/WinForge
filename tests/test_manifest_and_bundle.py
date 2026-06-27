@@ -11,6 +11,9 @@ class ManifestAndBundleTests(unittest.TestCase):
     def test_rejects_unknown_runtime_provider(self):
         invalid = json.loads(json.dumps(VALID)); invalid["runtime"]["provider"] = "steam-only"
         with self.assertRaises(ManifestError): Manifest.from_dict(invalid)
+    def test_rejects_removed_valve_proton_provider(self):
+        invalid = json.loads(json.dumps(VALID)); invalid["runtime"]["provider"] = "proton"
+        with self.assertRaises(ManifestError): Manifest.from_dict(invalid)
     def test_plan_contains_required_phase_order(self):
         phases = [x["phase"] for x in build_plan(Manifest.from_dict(VALID))]
         self.assertEqual(phases, ["init-prefix","install-dependencies","install-apps","apply-layout-and-registry","validate","seal-artifact"])

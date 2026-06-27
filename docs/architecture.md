@@ -1,6 +1,6 @@
 # WinForge Architecture
 
-WinForge compiles declarative Wine/Proton execution environment manifests into immutable execution bundles.
+WinForge compiles declarative Wine/Proton-family execution environment manifests into immutable execution bundles.
 
 ## Component model
 
@@ -33,7 +33,7 @@ The manifest defines runtime provider, dependencies, install steps, filesystem m
 
 ### 3. Runtime abstraction layer
 
-Providers are pluggable: `wine`, `staging`, `proton`, and `proton-ge`. Providers must not know about VIC, Kubernetes, or customer tenancy.
+Providers are pluggable through `runtime/catalog.json`; active v0 providers are `wine`, `staging`, and `proton-ge`. Providers must not know about VIC, Kubernetes, or customer tenancy.
 
 ### 4. Builder pipeline
 

@@ -2,9 +2,9 @@
 
 ## Overview
 
-WinForge runtime provider containers are the **OCI execution substrate** for Wine/Proton prefix construction. Each provider type maps to a Dockerfile that produces an OCI image containing:
+WinForge runtime provider containers are the **OCI execution substrate** for Wine/Proton-family prefix construction. Each provider type maps to a Dockerfile that produces an OCI image containing:
 
-- The Wine/Proton runtime binaries
+- The Wine/Proton-family runtime binaries
 - Xvfb for headless display emulation (required by many Windows installers)
 - Helper tools (winetricks, cabextract, 7zip, etc.)
 - The WinForge entrypoint chain
@@ -25,7 +25,7 @@ These images are the **base layer** on which WinForge builds prefixes, installs 
 │  wineboot init, drive_c, registry hive        │    builder pipeline
 ├──────────────────────────────────────────────┤
 │          WinForge Runtime Base                │  ← This repo's container
-│  Wine/Proton + Xvfb + tools + entrypoints     │    (Dockerfiles)
+│ Wine/Proton-GE + Xvfb + tools + entrypoints   │    (Dockerfiles)
 ├──────────────────────────────────────────────┤
 │          Base OS Layer                        │  ← Debian Bookworm Slim
 │  libc, libstdc++, basic runtime deps          │
@@ -47,7 +47,6 @@ where `ciBuild` is true.
 |---|---|---|---|---|
 | Wine Stable | `winforge/wine:<version>` | `ghcr.io/myos-dev/winforge-wine:<version>` | WineHQ apt (`.deb`) | `WINE_VERSION` |
 | Wine Staging | `winforge/wine-staging:<version>` | `ghcr.io/myos-dev/winforge-wine-staging:<version>` | WineHQ apt (`.deb`) | `WINE_VERSION` |
-| Valve Proton | `winforge/proton:<version>` | `ghcr.io/myos-dev/winforge-proton:<version>` | GitHub source archive (source seed) | `PROTON_VERSION` |
 | GE-Proton | `winforge/proton-ge:<tag>` | `ghcr.io/myos-dev/winforge-proton-ge:<tag>` | GitHub releases (`.tar.gz`) | `GE_PROTON_TAG` |
 
 ### Wine Stable / Staging
@@ -62,20 +61,19 @@ Dockerfile structure:
   Stage 4 (final)     — entrypoint, env vars, workdir
 ```
 
-### Proton / GE-Proton
+### GE-Proton
 
-Valve Proton GitHub releases are source-only. `winforge/proton` is a
-source-seed image built from the upstream source archive, useful for
-provenance and future build work but not yet the prebuilt runnable Proton
-runtime. `winforge/proton-ge` is the prebuilt Proton-family runtime today;
-it downloads GE-Proton release tarballs from GitHub and extracts them into
-`/opt/proton-ge`.
+`winforge/proton-ge` is the active Proton-family runtime today. It downloads
+GE-Proton release tarballs from GitHub and extracts them into `/opt/proton-ge`.
+Valve Proton is intentionally not an active v0 provider because upstream
+GitHub releases are source-only; add it later only with a real runnable
+binary acquisition path.
 
 ```
 Dockerfile structure:
   Stage 1 (base)      — Debian Bookworm Slim + i386 multiarch where needed
-  Stage 2 (download)  — curl source/release tarball + optional checksum verify
-  Stage 3 (extract)   — tar to /opt/proton-source or /opt/proton-ge
+  Stage 2 (download)  — curl GE-Proton release tarball + optional checksum verify
+  Stage 3 (extract)   — tar to /opt/proton-ge
   Stage 4 (final)     — entrypoint, STEAM_COMPAT env, workdir
 ```
 

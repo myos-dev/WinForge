@@ -2,11 +2,11 @@
 
 Date: 2026-06-27
 
-Status: proposed
+Status: accepted (amended by Decision 0002)
 
 ## Decision
 
-WinForge is an open-source reproducible environment compiler for Wine-based Windows execution environments. It produces immutable execution bundles from declarative manifests. Runtime selection uses a pluggable provider abstraction for Wine Stable, Wine Staging, Proton, and Proton-GE. VIC is a downstream consumer and must not be a dependency or internal concern.
+WinForge is an open-source reproducible environment compiler for Wine-based Windows execution environments. It produces immutable execution bundles from declarative manifests. Runtime selection uses a pluggable provider abstraction for Wine Stable, Wine Staging, and Proton-GE. VIC is a downstream consumer and must not be a dependency or internal concern.
 
 ## Reasoning
 

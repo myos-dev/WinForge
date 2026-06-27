@@ -14,7 +14,7 @@ Status: proposed initial scaffold.
 
 ## Runtime
 
-`provider` must be one of `wine`, `staging`, `proton`, or `proton-ge`. `version` is required. `source`, `channel`, and `digest` should pin provenance.
+`provider` must be one of `wine`, `staging`, or `proton-ge`. `version` is required. `source`, `channel`, and `digest` should pin provenance.
 
 ## Dependencies
 

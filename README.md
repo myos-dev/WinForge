@@ -1,6 +1,6 @@
 # WinForge
 
-**Deterministic Wine/Proton environment compiler.**
+**Deterministic Wine/Proton-family environment compiler.**
 
 WinForge takes a declarative manifest and compiles it into an immutable
 execution bundle — a sealed Wine prefix with installed dependencies,
@@ -16,7 +16,7 @@ provenance tracking. WinForge replaces that with:
 - **Deterministic builds** — Same manifest + same runtime = same bundle
 - **Immutable artifacts** — Sealed after construction, no drift
 - **Provenance recording** — Sources, hashes, versions tracked in metadata
-- **Runtime abstraction** — Swap Wine, Wine-Staging, Proton, or GE-Proton
+- **Runtime abstraction** — Swap Wine, Wine-Staging, or GE-Proton
   without changing the manifest
 - **OCI-native** — Bundles can be layered onto runtime container images
 
@@ -33,7 +33,7 @@ manifest.winforge.json
 ┌─────────────────┐       ┌──────────────────────────┐
 │  Runtime        │──────▶│  OCI Container Base       │
 │  Provider       │       │  (winforge/wine:9.0, etc) │
-│  (wine/proton)  │       └──────────────────────────┘
+│ (wine/proton-ge)│       └──────────────────────────┘
 └──────┬──────────┘                    │
        │                               │
        ▼                               ▼
@@ -96,9 +96,6 @@ winforge container build wine 9.0
 # Build Wine Staging
 winforge container build staging 9.0
 
-# Build Valve Proton source seed
-winforge container build proton 10.0-4
-
 # Build GE-Proton prebuilt runtime
 winforge container build proton-ge GE-Proton9-27
 
@@ -123,7 +120,6 @@ container/
 └── providers/
     ├── wine/Dockerfile               # Wine Stable (WineHQ apt)
     ├── wine-staging/Dockerfile       # Wine Staging (WineHQ apt)
-    ├── proton/Dockerfile             # Valve Proton source seed (GitHub source archive)
     └── proton-ge/Dockerfile          # GE-Proton (GitHub release)
 ```
 
@@ -155,7 +151,7 @@ WinForge/
 │   ├── catalog.json             # Supported runtime catalog (CI + Forge source of truth)
 │   ├── catalog.py               # Catalog loader + CI matrix generator
 │   ├── providers.py             # Runtime provider abstraction + OCI image binding
-│   └── wine.py / proton.py      # Provider-specific implementations
+│   └── providers.py             # Catalog-backed provider resolution
 ├── builder/
 │   ├── pipeline.py              # Build phase orchestration
 │   └── installer.py             # Application installation steps

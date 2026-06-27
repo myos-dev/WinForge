@@ -37,21 +37,6 @@ services:
     stdin_open: true
     tty: true
 
-  proton:
-    build:
-      context: ..
-      dockerfile: container/providers/proton/Dockerfile
-      args:
-        PROTON_VERSION: "10.0-4"
-    image: winforge/proton:10.0-4-dev
-    environment:
-      WINEFS: builder
-    volumes:
-      - ..:/workspace
-    working_dir: /workspace
-    stdin_open: true
-    tty: true
-
   proton-ge:
     build:
       context: ..
