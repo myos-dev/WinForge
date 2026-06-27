@@ -12,7 +12,7 @@ from typing import Any
 
 from builder.pipeline import generate_build_script
 from core.manifest import Manifest
-from runtime.providers import resolve_runtime, resolve_oci_image
+from runtime.providers import resolve_runtime
 
 
 @dataclass
@@ -87,28 +87,22 @@ def _pull_image(image_ref: str, engine: str) -> bool:
 def _resolve_image_ref(manifest: Manifest, engine: str) -> str | None:
     """Resolve the OCI image reference for this manifest's runtime.
 
-    Tries:
-      1. The OCI image map from providers.py.
-      2. A fallback constructed from provider name and version.
-      3. If neither works locally, try to pull from a registry.
+    Resolution is catalog-backed:
+      1. Prefer a local developer image if it exists.
+      2. Accept an already-local published GHCR tag if it exists.
+      3. Pull the published GHCR tag from the catalog.
     Returns the image ref, or None if unresolvable.
     """
-    # Try provider OCI mapping
-    oci = resolve_oci_image(manifest.runtime.provider, manifest.runtime.version)
-    if oci and _check_image(oci, engine):
-        return oci
-
-    # Fallback: constructed image name
-    fallback = f"winforge/{manifest.runtime.provider}:{manifest.runtime.version}"
-    if fallback != oci and _check_image(fallback, engine):
-        return fallback
-
-    # If the primary ref exists but wasn't local, try pulling
-    if oci:
-        # Attempt pull for the primary ref
-        if _pull_image(oci, engine):
-            return oci
-
+    binding = resolve_runtime(manifest.runtime)
+    candidates = [
+        ref for ref in [binding.local_oci_image, binding.oci_image]
+        if ref
+    ]
+    for ref in candidates:
+        if _check_image(ref, engine):
+            return ref
+    if binding.oci_image and _pull_image(binding.oci_image, engine):
+        return binding.oci_image
     return None
 
 

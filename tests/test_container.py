@@ -1,9 +1,10 @@
-"""Tests for the WinForge Container Manager."""
+"""Tests for the WinForge Container Manager and runtime catalog."""
 from __future__ import annotations
 import unittest
 from container.manager import (
     list_definitions,
     get_image_ref,
+    get_local_image_ref,
     build_container,
 )
 
@@ -18,23 +19,32 @@ class ContainerManagerTests(unittest.TestCase):
         self.assertIn("proton", names)
         self.assertIn("proton-ge", names)
 
-    def test_get_image_ref_known_provider(self):
-        self.assertEqual(get_image_ref("wine", "9.0"), "winforge/wine:9.0")
+    def test_get_image_ref_known_provider_returns_published_ref(self):
+        self.assertEqual(get_image_ref("wine", "9.0"),
+                         "ghcr.io/myos-dev/winforge-wine:9.0")
         self.assertEqual(get_image_ref("staging", "9.0"),
-                         "winforge/wine-staging:9.0")
-        self.assertEqual(get_image_ref("proton", "9.0"),
-                         "winforge/proton:9.0")
+                         "ghcr.io/myos-dev/winforge-wine-staging:9.0")
+        self.assertEqual(get_image_ref("proton", "10.0-4"),
+                         "ghcr.io/myos-dev/winforge-proton:10.0-4")
         self.assertEqual(get_image_ref("proton-ge", "GE-Proton9-27"),
-                         "winforge/proton-ge:GE-Proton9-27")
+                         "ghcr.io/myos-dev/winforge-proton-ge:GE-Proton9-27")
 
-    def test_get_image_ref_unknown_falls_back(self):
+    def test_get_local_image_ref_known_provider(self):
+        self.assertEqual(get_local_image_ref("wine", "9.0"),
+                         "winforge/wine:9.0")
+        self.assertEqual(get_local_image_ref("staging", "9.0"),
+                         "winforge/wine-staging:9.0")
+
+    def test_get_image_ref_unknown_falls_back_to_published_name(self):
         self.assertEqual(get_image_ref("unknown", "1.0"),
+                         "ghcr.io/myos-dev/winforge-unknown:1.0")
+        self.assertEqual(get_local_image_ref("unknown", "1.0"),
                          "winforge/unknown:1.0")
 
     def test_build_container_unknown_provider(self):
         result = build_container("nonexistent", "1.0")
         self.assertFalse(result.success)
-        self.assertIn("Unknown provider", result.log)
+        self.assertIn("Unknown provider/version", result.log)
 
     def test_build_container_no_docker(self):
         # Returns file-not-found or build-failed — not an exception
@@ -43,16 +53,51 @@ class ContainerManagerTests(unittest.TestCase):
         self.assertIn("not found", result.log.lower())
 
 
+class RuntimeCatalogTests(unittest.TestCase):
+
+    def test_catalog_ci_matrix_contains_build_entries(self):
+        from runtime.catalog import ci_matrix
+        matrix = ci_matrix()
+        self.assertIn("include", matrix)
+        providers = {entry["provider"] for entry in matrix["include"]}
+        self.assertEqual(providers, {"wine", "staging", "proton", "proton-ge"})
+        for entry in matrix["include"]:
+            self.assertIn("dockerfile", entry)
+            self.assertIn("build_arg", entry)
+            self.assertIn("image_name", entry)
+            self.assertIsInstance(entry["version"], str)
+
+    def test_catalog_default_version_resolution(self):
+        from runtime.catalog import resolve_catalog_version
+        entry = resolve_catalog_version("wine", "default")
+        self.assertIsNotNone(entry)
+        assert entry is not None
+        self.assertEqual(entry.version, "9.0")
+        self.assertEqual(entry.published_ref,
+                         "ghcr.io/myos-dev/winforge-wine:9.0")
+
+    def test_valve_proton_catalog_marks_source_seed_not_runtime_usable(self):
+        from runtime.catalog import resolve_catalog_version
+        entry = resolve_catalog_version("proton", "default")
+        self.assertIsNotNone(entry)
+        assert entry is not None
+        self.assertEqual(entry.version, "10.0-4")
+        self.assertFalse(entry.runtime_usable)
+
+
 class RuntimeProviderOCITests(unittest.TestCase):
 
-    def test_runtime_binding_includes_oci_image(self):
+    def test_runtime_binding_includes_published_and_local_oci_images(self):
         from core.manifest import RuntimeSpec
         from runtime.providers import resolve_runtime
         binding = resolve_runtime(RuntimeSpec(
             provider="wine", version="9.0",
         ))
-        self.assertIsNotNone(binding.oci_image)
-        self.assertEqual(binding.oci_image, "winforge/wine:9.0")
+        self.assertEqual(binding.oci_image,
+                         "ghcr.io/myos-dev/winforge-wine:9.0")
+        self.assertEqual(binding.local_oci_image,
+                         "winforge/wine:9.0")
+        self.assertTrue(binding.runtime_usable)
 
     def test_runtime_binding_oci_image_staging(self):
         from core.manifest import RuntimeSpec
@@ -60,7 +105,10 @@ class RuntimeProviderOCITests(unittest.TestCase):
         binding = resolve_runtime(RuntimeSpec(
             provider="staging", version="9.0",
         ))
-        self.assertEqual(binding.oci_image, "winforge/wine-staging:9.0")
+        self.assertEqual(binding.oci_image,
+                         "ghcr.io/myos-dev/winforge-wine-staging:9.0")
+        self.assertEqual(binding.local_oci_image,
+                         "winforge/wine-staging:9.0")
 
     def test_runtime_binding_oci_image_proton_ge(self):
         from core.manifest import RuntimeSpec
@@ -69,17 +117,22 @@ class RuntimeProviderOCITests(unittest.TestCase):
             provider="proton-ge", version="GE-Proton9-27",
         ))
         self.assertEqual(binding.oci_image,
+                         "ghcr.io/myos-dev/winforge-proton-ge:GE-Proton9-27")
+        self.assertEqual(binding.local_oci_image,
                          "winforge/proton-ge:GE-Proton9-27")
 
     def test_oci_image_in_to_dict(self):
         from core.manifest import RuntimeSpec
         from runtime.providers import resolve_runtime
         binding = resolve_runtime(RuntimeSpec(
-            provider="proton", version="9.0",
+            provider="proton", version="default",
         ))
         d = binding.to_dict()
         self.assertIn("ociImage", d)
-        self.assertEqual(d["ociImage"], "winforge/proton:9.0")
+        self.assertIn("localOciImage", d)
+        self.assertEqual(d["ociImage"],
+                         "ghcr.io/myos-dev/winforge-proton:10.0-4")
+        self.assertFalse(d["runtimeUsable"])
 
     def test_to_dict_omits_none_oci(self):
         """Custom providers without OCI mapping should omit the field."""

@@ -32,14 +32,23 @@ These images are the **base layer** on which WinForge builds prefixes, installs 
 └──────────────────────────────────────────────┘
 ```
 
-## Provider Images
+## Runtime Catalog and Provider Images
 
-| Provider | Image Name | Source | Build Arg |
-|---|---|---|---|
-| Wine Stable | `winforge/wine:<version>` | WineHQ apt (`.deb`) | `WINE_VERSION` |
-| Wine Staging | `winforge/wine-staging:<version>` | WineHQ apt (`.deb`) | `WINE_VERSION` |
-| Valve Proton | `winforge/proton:<version>` | GitHub source archive (source seed) | `PROTON_VERSION` |
-| GE-Proton | `winforge/proton-ge:<tag>` | GitHub releases (`.tar.gz`) | `GE_PROTON_TAG` |
+`runtime/catalog.json` is the authoritative runtime catalog. It declares
+which provider/version pairs WinForge supports, which Dockerfile/build arg
+builds each base image, which local tag is used for development, and which
+published GHCR image Forge should pull during normal builds.
+
+GitHub Actions does **not** hardcode runtime versions. The workflow runs
+`python3 -m runtime.catalog --ci-matrix` and builds every catalog entry
+where `ciBuild` is true.
+
+| Provider | Local Image | Published Image | Source | Build Arg |
+|---|---|---|---|---|
+| Wine Stable | `winforge/wine:<version>` | `ghcr.io/myos-dev/winforge-wine:<version>` | WineHQ apt (`.deb`) | `WINE_VERSION` |
+| Wine Staging | `winforge/wine-staging:<version>` | `ghcr.io/myos-dev/winforge-wine-staging:<version>` | WineHQ apt (`.deb`) | `WINE_VERSION` |
+| Valve Proton | `winforge/proton:<version>` | `ghcr.io/myos-dev/winforge-proton:<version>` | GitHub source archive (source seed) | `PROTON_VERSION` |
+| GE-Proton | `winforge/proton-ge:<tag>` | `ghcr.io/myos-dev/winforge-proton-ge:<tag>` | GitHub releases (`.tar.gz`) | `GE_PROTON_TAG` |
 
 ### Wine Stable / Staging
 
@@ -55,13 +64,18 @@ Dockerfile structure:
 
 ### Proton / GE-Proton
 
-Built by downloading release tarballs from GitHub, verifying SHA256 (when provided), and extracting to `/opt/proton` or `/opt/proton-ge`.
+Valve Proton GitHub releases are source-only. `winforge/proton` is a
+source-seed image built from the upstream source archive, useful for
+provenance and future build work but not yet the prebuilt runnable Proton
+runtime. `winforge/proton-ge` is the prebuilt Proton-family runtime today;
+it downloads GE-Proton release tarballs from GitHub and extracts them into
+`/opt/proton-ge`.
 
 ```
 Dockerfile structure:
-  Stage 1 (base)      — Debian Bookworm Slim + i386 multiarch
-  Stage 2 (download)  — curl release tarball + sha256sum verify
-  Stage 3 (extract)   — tar to /opt/proton or /opt/proton-ge
+  Stage 1 (base)      — Debian Bookworm Slim + i386 multiarch where needed
+  Stage 2 (download)  — curl source/release tarball + optional checksum verify
+  Stage 3 (extract)   — tar to /opt/proton-source or /opt/proton-ge
   Stage 4 (final)     — entrypoint, STEAM_COMPAT env, workdir
 ```
 
@@ -87,9 +101,9 @@ winforge container build wine 9.0
 # Build and push to registry
 winforge container build wine 9.0 --engine docker --registry ghcr.io/myorg --push
 
-# Get the OCI image reference for a provider+version
+# Get the published OCI image reference for a provider+version
 winforge container ref wine 9.0
-# → winforge/wine:9.0
+# → ghcr.io/myos-dev/winforge-wine:9.0
 
 # Plan a build — includes resolved OCI image
 winforge plan examples/minimal.winforge.json
@@ -100,15 +114,15 @@ winforge build examples/minimal.winforge.json --dry-run
 
 ## Runtime Binding
 
-When a manifest is resolved, the `RuntimeBinding.oci_image` field contains the fully-qualified OCI image reference. This is produced by `runtime/providers.py` -> `resolve_oci_image()`.
+When a manifest is resolved, `RuntimeBinding.oci_image` contains the published GHCR image reference and `RuntimeBinding.local_oci_image` contains the local developer tag. Both are produced from `runtime/catalog.json` through `runtime/providers.py`.
 
-The `plan` and `build` CLI commands automatically resolve the OCI image reference and include it in their output.
+The `plan` and `build` CLI commands automatically resolve the catalog-backed OCI image reference and include it in their output.
 
 ## Consumption by VIC (future)
 
 When VIC consumes WinForge artifacts:
 
-1. VIC pulls the `winforge/wine:<version>` base image
+1. VIC pulls the catalog-resolved published base image, e.g. `ghcr.io/myos-dev/winforge-wine:<version>`
 2. VIC pulls the WinForge-produced bundle OCI image (with prefix + app layer)
 3. VIC launches the combined image with the VIC runtime contract
 4. The container starts with Xvfb, enters the entrypoint, and VIC interacts via STDIO

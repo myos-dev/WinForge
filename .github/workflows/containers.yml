@@ -6,6 +6,10 @@ on:
     branches: [main]
     paths:
       - 'container/**'
+      - 'runtime/catalog.json'
+      - 'runtime/catalog.py'
+      - 'runtime/providers.py'
+      - 'container/manager.py'
       - '.github/workflows/containers.yml'
   workflow_dispatch:
 
@@ -17,28 +21,26 @@ env:
   REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.catalog.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate build matrix from runtime catalog
+        id: catalog
+        run: |
+          MATRIX="$(python3 -m runtime.catalog --ci-matrix)"
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+          echo "Runtime catalog matrix:"
+          echo "${MATRIX}" | python3 -m json.tool
+
   build:
     runs-on: ubuntu-latest
+    needs: catalog
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - provider: wine
-            dockerfile: container/providers/wine/Dockerfile
-            build_arg: WINE_VERSION=9.0
-            version: "9.0"
-          - provider: wine-staging
-            dockerfile: container/providers/wine-staging/Dockerfile
-            build_arg: WINE_VERSION=9.0
-            version: "9.0"
-          - provider: proton
-            dockerfile: container/providers/proton/Dockerfile
-            build_arg: PROTON_VERSION=10.0-4
-            version: "10.0-4"
-          - provider: proton-ge
-            dockerfile: container/providers/proton-ge/Dockerfile
-            build_arg: GE_PROTON_TAG=GE-Proton9-27
-            version: "GE-Proton9-27"
+      matrix: ${{ fromJSON(needs.catalog.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,15 +51,15 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push ${{ matrix.provider }}:${{ matrix.version }}
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
           tags: |
-            ${{ env.REGISTRY }}/winforge-${{ matrix.provider }}:${{ matrix.version }}
-            ${{ env.REGISTRY }}/winforge-${{ matrix.provider }}:latest
-            ${{ env.REGISTRY }}/winforge-${{ matrix.provider }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ matrix.image_name }}:${{ matrix.tag }}
+            ${{ env.REGISTRY }}/${{ matrix.image_name }}:latest
+            ${{ env.REGISTRY }}/${{ matrix.image_name }}:${{ github.sha }}
           build-args: |
             ${{ matrix.build_arg }}

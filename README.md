@@ -81,26 +81,33 @@ winforge providers
 The runtime provider containers are the OCI execution substrate.
 See [docs/container-architecture.md](docs/container-architecture.md).
 
+`runtime/catalog.json` is the source of truth for supported runtime
+provider versions, Dockerfiles, build args, local image refs, and
+published GHCR image refs. CI generates its build matrix from this file,
+and Forge resolves manifests through the same catalog.
+
 ```bash
-# List available container build definitions
+# List available catalog-backed container build definitions
 winforge container list
 
-# Build a Wine Stable 9.0 container
+# Build a Wine Stable container from the catalog
 winforge container build wine 9.0
 
 # Build Wine Staging
 winforge container build staging 9.0
 
-# Build Proton
-winforge container build proton 9.0
+# Build Valve Proton source seed
+winforge container build proton 10.0-4
 
-# Build GE-Proton
+# Build GE-Proton prebuilt runtime
 winforge container build proton-ge GE-Proton9-27
 
-# Get the OCI image reference for a provider+version
+# Get the published OCI image reference for a provider+version
 winforge container ref wine 9.0
+# → ghcr.io/myos-dev/winforge-wine:9.0
 
-# Build from Docker compose
+# Build from Docker compose for local development
+# (Compose is a dev convenience; runtime/catalog.json is authoritative.)
 docker compose -f container/docker-compose.yml build wine
 ```
 
@@ -145,6 +152,8 @@ WinForge/
 │   ├── prefix.py                # Prefix abstraction
 │   └── provenance.py            # Provenance tracking
 ├── runtime/
+│   ├── catalog.json             # Supported runtime catalog (CI + Forge source of truth)
+│   ├── catalog.py               # Catalog loader + CI matrix generator
 │   ├── providers.py             # Runtime provider abstraction + OCI image binding
 │   └── wine.py / proton.py      # Provider-specific implementations
 ├── builder/
@@ -180,7 +189,7 @@ python3 -m compileall .
 bash container/build.sh
 
 # Or build a specific container
-bash container/build.sh wine 9.0
+bash container/build.sh wine default
 ```
 
 ## License

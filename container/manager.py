@@ -1,53 +1,17 @@
 """WinForge Container Manager.
 
-Manages the lifecycle of WinForge Wine/Proton runtime OCI containers:
-building, pulling, listing, and providing container metadata to the
-builder pipeline.
+Uses runtime/catalog.json as the source of truth for available runtime
+container builds and image references.
 """
 from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-PROVIDER_DIR = ROOT / "container" / "providers"
-
-# Provider names must match runtime/providers.py names.
-# directory_name may differ (e.g. provider "staging" → dir "wine-staging").
-_CONTAINER_DEFS: dict[str, dict[str, Any]] = {
-    "wine": {
-        "directory_name": "wine",
-        "image_prefix": "winforge/wine",
-        "build_arg": "WINE_VERSION",
-    },
-    "staging": {
-        "directory_name": "wine-staging",
-        "image_prefix": "winforge/wine-staging",
-        "build_arg": "WINE_VERSION",
-    },
-    "proton": {
-        "directory_name": "proton",
-        "image_prefix": "winforge/proton",
-        "build_arg": "PROTON_VERSION",
-    },
-    "proton-ge": {
-        "directory_name": "proton-ge",
-        "image_prefix": "winforge/proton-ge",
-        "build_arg": "GE_PROTON_TAG",
-    },
-}
-
-
-def _def(provider: str) -> dict[str, Any] | None:
-    raw = _CONTAINER_DEFS.get(provider)
-    if raw is None:
-        return None
-    # Resolve directory path from directory_name
-    d = dict(raw)
-    d["directory"] = PROVIDER_DIR / d["directory_name"]
-    d["dockerfile"] = d["directory"] / "Dockerfile"
-    return d
+from runtime.catalog import (
+    list_catalog_providers,
+    resolve_catalog_version,
+)
 
 
 @dataclass
@@ -71,16 +35,25 @@ class ContainerBuildResult:
 
 
 def list_definitions() -> list[dict[str, Any]]:
-    return [
-        {
-            "name": name,
-            "imagePrefix": d["image_prefix"],
-            "buildArg": d["build_arg"],
-            "directory": str((PROVIDER_DIR / d["directory_name"]).resolve()),
-            "dockerfile": str((PROVIDER_DIR / d["directory_name"] / "Dockerfile").resolve()),
-        }
-        for name, d in _CONTAINER_DEFS.items()
-    ]
+    definitions: list[dict[str, Any]] = []
+    for provider in list_catalog_providers():
+        default_entry = resolve_catalog_version(provider, "default")
+        if default_entry is None:
+            continue
+        definitions.append({
+            "name": provider,
+            "displayName": default_entry.provider,
+            "defaultVersion": default_entry.version,
+            "launcher": default_entry.launcher,
+            "localImage": default_entry.local_image,
+            "localRef": default_entry.local_ref,
+            "publishedImageName": default_entry.published_image_name,
+            "publishedRef": default_entry.published_ref,
+            "buildArg": default_entry.build_arg,
+            "dockerfile": str(default_entry.dockerfile_path),
+            "runtimeUsable": default_entry.runtime_usable,
+        })
+    return definitions
 
 
 def build_container(
@@ -91,31 +64,35 @@ def build_container(
     push: bool = False,
     build_cmd: str = "docker",
 ) -> ContainerBuildResult:
-    definition = _def(provider)
-    if not definition:
-        msg = (f"Unknown provider: {provider}. "
-               f"Known: {', '.join(_CONTAINER_DEFS)}")
+    entry = resolve_catalog_version(provider, version)
+    if entry is None:
+        msg = (f"Unknown provider/version: {provider}:{version}. "
+               "Add it to runtime/catalog.json first.")
         return ContainerBuildResult(provider, version, "", "", False, msg)
 
-    dockerfile = definition["dockerfile"]
+    dockerfile = entry.dockerfile_path
     if not dockerfile.exists():
         return ContainerBuildResult(
-            provider, version, "", str(dockerfile), False,
+            provider, entry.tag, "", str(dockerfile), False,
             f"Dockerfile not found: {dockerfile}",
         )
 
-    image_tag = f"{definition['image_prefix']}:{version}"
-    registry_tag = f"{registry}/{image_tag}" if registry else ""
+    local_tag = entry.local_ref
+    publish_registry = registry or (entry.default_registry if push else None)
+    published_tag = (
+        f"{publish_registry}/{entry.published_image_name}:{entry.tag}"
+        if publish_registry else ""
+    )
 
     cmd = [
         build_cmd, "build",
-        "--build-arg", f"{definition['build_arg']}={version}",
-        "-t", image_tag,
+        "--build-arg", entry.build_arg_line(),
+        "-t", local_tag,
         "-f", str(dockerfile),
-        str(ROOT),
+        str(dockerfile.parents[2].parent),
     ]
-    if registry_tag:
-        cmd.extend(["-t", registry_tag])
+    if published_tag:
+        cmd.extend(["-t", published_tag])
 
     try:
         result = subprocess.run(
@@ -124,41 +101,45 @@ def build_container(
         log = result.stdout + result.stderr
         if result.returncode != 0:
             return ContainerBuildResult(
-                provider, version, image_tag, str(dockerfile), False,
+                provider, entry.tag, local_tag, str(dockerfile), False,
                 f"Build failed (exit {result.returncode}):\n{log[-2000:]}",
             )
 
-        if push and registry_tag:
+        if push and published_tag:
             push_result = subprocess.run(
-                [build_cmd, "push", registry_tag],
+                [build_cmd, "push", published_tag],
                 capture_output=True, text=True, timeout=300,
             )
+            log += push_result.stdout + push_result.stderr
             if push_result.returncode != 0:
-                log += (f"\nPush failed (exit {push_result.returncode}):\n"
-                        f"{push_result.stderr[-1000:]}")
+                return ContainerBuildResult(
+                    provider, entry.tag, published_tag, str(dockerfile), False,
+                    f"Push failed (exit {push_result.returncode}):\n{log[-2000:]}",
+                )
 
         return ContainerBuildResult(
-            provider, version, image_tag, str(dockerfile), True, log,
+            provider, entry.tag, published_tag or local_tag,
+            str(dockerfile), True, log,
         )
 
     except subprocess.TimeoutExpired:
         return ContainerBuildResult(
-            provider, version, image_tag, str(dockerfile), False,
+            provider, entry.tag, local_tag, str(dockerfile), False,
             "Build timed out after 600s",
         )
     except FileNotFoundError:
         return ContainerBuildResult(
-            provider, version, image_tag, str(dockerfile), False,
+            provider, entry.tag, local_tag, str(dockerfile), False,
             f"Command '{build_cmd}' not found. Install Docker or Podman.",
         )
 
 
 def get_image_available(provider: str, version: str, *,
-                        build_cmd: str = "docker") -> bool:
-    definition = _def(provider)
-    if not definition:
+                        build_cmd: str = "docker",
+                        published: bool = False) -> bool:
+    image_ref = get_image_ref(provider, version, published=published)
+    if not image_ref:
         return False
-    image_ref = f"{definition['image_prefix']}:{version}"
     try:
         result = subprocess.run(
             [build_cmd, "image", "inspect", image_ref],
@@ -169,8 +150,16 @@ def get_image_available(provider: str, version: str, *,
         return False
 
 
-def get_image_ref(provider: str, version: str) -> str:
-    definition = _def(provider)
-    if definition:
-        return f"{definition['image_prefix']}:{version}"
+def get_image_ref(provider: str, version: str,
+                  *, published: bool = True) -> str:
+    entry = resolve_catalog_version(provider, version)
+    if entry:
+        return entry.published_ref if published else entry.local_ref
+    image_name = provider if provider.startswith("winforge-") else f"winforge-{provider}"
+    if published:
+        return f"ghcr.io/myos-dev/{image_name}:{version}"
     return f"winforge/{provider}:{version}"
+
+
+def get_local_image_ref(provider: str, version: str) -> str:
+    return get_image_ref(provider, version, published=False)

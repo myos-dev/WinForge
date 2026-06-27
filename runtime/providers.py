@@ -1,16 +1,13 @@
-"""Pluggable runtime provider abstraction with OCI container image binding."""
+"""Pluggable runtime provider abstraction with runtime catalog binding."""
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
-from core.manifest import ManifestError, RuntimeSpec
 
-# Registry of known OCI image references per provider
-OCI_IMAGE_MAP: dict[str, tuple[str, str]] = {
-    "wine":       ("winforge/wine",        ""),
-    "staging":    ("winforge/wine-staging", ""),
-    "proton":     ("winforge/proton",      ""),
-    "proton-ge":  ("winforge/proton-ge",   ""),
-}
+from core.manifest import ManifestError, RuntimeSpec
+from runtime.catalog import (
+    list_catalog_providers,
+    resolve_catalog_version,
+)
 
 
 @dataclass(frozen=True)
@@ -23,24 +20,23 @@ class RuntimeBinding:
     digest: str | None = None
     notes: str | None = None
     oci_image: str | None = None
+    local_oci_image: str | None = None
+    runtime_usable: bool | None = None
 
     def to_dict(self):
         d = {k: v for k, v in {
-            "provider": self.provider, "version": self.version,
-            "launcher": self.launcher, "source": self.source,
-            "channel": self.channel, "digest": self.digest,
-            "notes": self.notes, "ociImage": self.oci_image,
+            "provider": self.provider,
+            "version": self.version,
+            "launcher": self.launcher,
+            "source": self.source,
+            "channel": self.channel,
+            "digest": self.digest,
+            "notes": self.notes,
+            "ociImage": self.oci_image,
+            "localOciImage": self.local_oci_image,
+            "runtimeUsable": self.runtime_usable,
         }.items() if v is not None}
         return d
-
-
-def resolve_oci_image(provider: str, version: str) -> str | None:
-    entry = OCI_IMAGE_MAP.get(provider)
-    if entry is None:
-        return None
-    repo, tag_prefix = entry
-    tag = f"{tag_prefix}{version}" if tag_prefix else version
-    return f"{repo}:{tag}"
 
 
 class RuntimeProvider(Protocol):
@@ -48,79 +44,64 @@ class RuntimeProvider(Protocol):
     def resolve(self, spec: RuntimeSpec) -> RuntimeBinding: ...
 
 
-class WineProvider:
-    name = "wine"
-    def resolve(self, spec):
-        oci = resolve_oci_image(spec.provider, spec.version)
-        return RuntimeBinding(
-            spec.provider, spec.version, "wine",
-            spec.source, spec.channel, spec.digest,
-            "Wine Stable OCI base — built from WineHQ packages.",
-            oci_image=oci,
-        )
+_EXTRA_PROVIDERS: dict[str, RuntimeProvider] = {}
 
 
-class WineStagingProvider:
-    name = "staging"
-    def resolve(self, spec):
-        oci = resolve_oci_image(spec.provider, spec.version)
-        return RuntimeBinding(
-            spec.provider, spec.version, "wine",
-            spec.source, spec.channel, spec.digest,
-            "Wine Staging OCI base — WineHQ staging packages.",
-            oci_image=oci,
-        )
+def resolve_oci_image(provider: str, version: str,
+                      channel: str | None = None,
+                      *, published: bool = True) -> str | None:
+    """Resolve provider/version to an OCI image ref from the catalog.
+
+    By default this returns the published GHCR ref, because that is what a
+    normal Forge build should pull after CI publishes the runtime catalog.
+    Pass ``published=False`` for the local developer tag.
+    """
+    entry = resolve_catalog_version(provider, version, channel)
+    if entry is None:
+        return None
+    return entry.published_ref if published else entry.local_ref
 
 
-class ProtonProvider:
-    name = "proton"
-    def resolve(self, spec):
-        oci = resolve_oci_image(spec.provider, spec.version)
-        return RuntimeBinding(
-            spec.provider, spec.version, "proton",
-            spec.source, spec.channel, spec.digest,
-            "Valve Proton source OCI seed — GitHub source archive; use proton-ge for a prebuilt Proton runtime.",
-            oci_image=oci,
-        )
-
-
-class ProtonGEProvider:
-    name = "proton-ge"
-    def resolve(self, spec):
-        oci = resolve_oci_image(spec.provider, spec.version)
-        return RuntimeBinding(
-            spec.provider, spec.version, "proton",
-            spec.source, spec.channel, spec.digest,
-            "GE-Proton OCI base — GloriousEggroll releases.",
-            oci_image=oci,
-        )
-
-
-_PROVIDERS = {
-    p.name: p
-    for p in [WineProvider(), WineStagingProvider(), ProtonProvider(), ProtonGEProvider()]
-}
+def resolve_local_oci_image(provider: str, version: str,
+                            channel: str | None = None) -> str | None:
+    return resolve_oci_image(provider, version, channel, published=False)
 
 
 def register_provider(provider: RuntimeProvider):
-    _PROVIDERS[provider.name] = provider
-    if provider.name not in OCI_IMAGE_MAP:
-        OCI_IMAGE_MAP[provider.name] = (f"winforge/{provider.name}", "")
+    _EXTRA_PROVIDERS[provider.name] = provider
 
 
 def resolve_runtime(spec: RuntimeSpec) -> RuntimeBinding:
-    try:
-        return _PROVIDERS[spec.provider].resolve(spec)
-    except KeyError as exc:
-        raise ManifestError(f"unsupported runtime provider: {spec.provider}") from exc
+    if spec.provider in _EXTRA_PROVIDERS:
+        return _EXTRA_PROVIDERS[spec.provider].resolve(spec)
+
+    entry = resolve_catalog_version(spec.provider, spec.version, spec.channel)
+    if entry is None:
+        known = set(list_catalog_providers())
+        if spec.provider not in known:
+            raise ManifestError(f"unsupported runtime provider: {spec.provider}")
+        raise ManifestError(
+            f"unsupported runtime version for {spec.provider}: {spec.version}. "
+            "Add it to runtime/catalog.json before building."
+        )
+
+    return RuntimeBinding(
+        provider=spec.provider,
+        version=entry.version,
+        launcher=entry.launcher,
+        source=spec.source,
+        channel=entry.channel or spec.channel,
+        digest=spec.digest,
+        notes=entry.notes,
+        oci_image=entry.published_ref,
+        local_oci_image=entry.local_ref,
+        runtime_usable=entry.runtime_usable,
+    )
 
 
 def list_providers() -> list[str]:
-    return sorted(_PROVIDERS)
+    return sorted(set(list_catalog_providers()) | set(_EXTRA_PROVIDERS))
 
 
 def resolve_image(provider: str, version: str) -> str | None:
-    oci = resolve_oci_image(provider, version)
-    if oci:
-        return oci
-    return f"winforge/{provider}:{version}" if provider else None
+    return resolve_oci_image(provider, version)

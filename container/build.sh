@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # WinForge Container Build Script
 #
-# Builds one or all WinForge Wine/Proton runtime OCI images.
+# Builds one or all WinForge Wine/Proton runtime OCI images from
+# runtime/catalog.json.
 #
 # Usage:
-#   ./container/build.sh                  # build all providers
-#   ./container/build.sh wine 9.0         # build wine:9.0
-#   ./container/build.sh wine-staging 9.0
-#   ./container/build.sh proton 9.0 --push
+#   ./container/build.sh                         # build all CI-enabled catalog entries
+#   ./container/build.sh wine default            # build catalog default for wine
+#   ./container/build.sh staging 9.0
 #   ./container/build.sh proton-ge GE-Proton9-27
 
 set -euo pipefail
@@ -17,44 +17,51 @@ BUILD_CMD="${BUILD_CMD:-docker}"
 REGISTRY="${REGISTRY:-}"
 PUSH="${PUSH:-}"
 
-build_one() {
-    local provider="$1" version="$2" dockerfile="$3" tag="$4"
-    shift 4
+build_entry() {
+    local provider="$1" version="$2" tag="$3" local_image="$4" dockerfile="$5" build_arg="$6" image_name="$7"
+    shift 7
 
-    echo "=== Building winforge/${provider}:${tag} ==="
-    $BUILD_CMD build \
-        --build-arg "${version}" \
-        ${REGISTRY:+--tag "${REGISTRY}/winforge/${provider}:${tag}"} \
-        --tag "winforge/${provider}:${tag}" \
-        -f "$dockerfile" \
-        "$@" \
-        .
+    echo "=== Building ${local_image}:${tag} from catalog ${provider}:${version} ==="
+    local cmd=(
+        "$BUILD_CMD" build
+        --build-arg "$build_arg"
+        --tag "${local_image}:${tag}"
+    )
+
+    if [ -n "$REGISTRY" ]; then
+        cmd+=(--tag "${REGISTRY}/${image_name}:${tag}")
+    fi
+
+    cmd+=( -f "$dockerfile" )
+    cmd+=( "$@" )
+    cmd+=( . )
+    "${cmd[@]}"
 
     if [ -n "$PUSH" ] && [ -n "$REGISTRY" ]; then
-        echo "=== Pushing ${REGISTRY}/winforge/${provider}:${tag} ==="
-        $BUILD_CMD push "${REGISTRY}/winforge/${provider}:${tag}"
+        echo "=== Pushing ${REGISTRY}/${image_name}:${tag} ==="
+        "$BUILD_CMD" push "${REGISTRY}/${image_name}:${tag}"
     fi
     echo ""
 }
 
 if [ $# -eq 0 ]; then
-    # Build all providers with default versions
-    build_one wine "WINE_VERSION=9.0" container/providers/wine/Dockerfile 9.0
-    build_one wine-staging "WINE_VERSION=9.0" container/providers/wine-staging/Dockerfile 9.0
-    build_one proton "PROTON_VERSION=10.0-4" container/providers/proton/Dockerfile 10.0-4
-    build_one proton-ge "GE_PROTON_TAG=GE-Proton9-27" container/providers/proton-ge/Dockerfile GE-Proton9-27
-    echo "=== All containers built ==="
+    while IFS=$'\t' read -r provider version tag local_image dockerfile build_arg image_name; do
+        [ -n "$provider" ] || continue
+        build_entry "$provider" "$version" "$tag" "$local_image" "$dockerfile" "$build_arg" "$image_name"
+    done < <(python3 -m runtime.catalog --shell-build-list)
+    echo "=== All catalog-enabled containers built ==="
 elif [ $# -ge 2 ]; then
-    provider="$1"; tag="$2"; shift 2
-    case "$provider" in
-        wine) build_one wine "WINE_VERSION=${tag}" "container/providers/wine/Dockerfile" "$tag" "$@" ;;
-        wine-staging) build_one wine-staging "WINE_VERSION=${tag}" "container/providers/wine-staging/Dockerfile" "$tag" "$@" ;;
-        proton) build_one proton "PROTON_VERSION=${tag}" "container/providers/proton/Dockerfile" "$tag" "$@" ;;
-        proton-ge) build_one proton-ge "GE_PROTON_TAG=${tag}" "container/providers/proton-ge/Dockerfile" "$tag" "$@" ;;
-        *) echo "Unknown provider: $provider"; echo "Valid: wine, wine-staging, proton, proton-ge"; exit 1 ;;
-    esac
+    provider="$1"; version="$2"; shift 2
+    eval "$(python3 -m runtime.catalog --shell-build-entry "$provider" "$version")"
+    build_entry "$CATALOG_PROVIDER" "$CATALOG_VERSION" "$CATALOG_TAG" \
+        "$CATALOG_LOCAL_IMAGE" "$CATALOG_DOCKERFILE" \
+        "$CATALOG_BUILD_ARG_LINE" "$CATALOG_PUBLISHED_IMAGE_NAME" "$@"
 else
     echo "Usage: $0 [provider version]"
-    echo "  provider: wine | wine-staging | proton | proton-ge"
+    echo "  provider: $(python3 - <<'PY'
+from runtime.catalog import list_catalog_providers
+print(' | '.join(list_catalog_providers()))
+PY
+)"
     exit 1
 fi

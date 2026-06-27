@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "winforge.runtime-catalog/v0",
+  "defaultRegistry": "ghcr.io/myos-dev",
+  "providers": {
+    "wine": {
+      "displayName": "Wine Stable",
+      "launcher": "wine",
+      "localImage": "winforge/wine",
+      "publishedImageName": "winforge-wine",
+      "dockerfile": "container/providers/wine/Dockerfile",
+      "buildArg": "WINE_VERSION",
+      "defaultVersion": "9.0",
+      "notes": "Wine Stable OCI base — built from WineHQ packages.",
+      "versions": {
+        "9.0": {
+          "buildValue": "9.0",
+          "tag": "9.0",
+          "channel": "stable",
+          "ciBuild": true,
+          "runtimeUsable": true
+        }
+      }
+    },
+    "staging": {
+      "displayName": "Wine Staging",
+      "launcher": "wine",
+      "localImage": "winforge/wine-staging",
+      "publishedImageName": "winforge-wine-staging",
+      "dockerfile": "container/providers/wine-staging/Dockerfile",
+      "buildArg": "WINE_VERSION",
+      "defaultVersion": "9.0",
+      "notes": "Wine Staging OCI base — WineHQ staging packages.",
+      "versions": {
+        "9.0": {
+          "buildValue": "9.0",
+          "tag": "9.0",
+          "channel": "staging",
+          "ciBuild": true,
+          "runtimeUsable": true
+        }
+      }
+    },
+    "proton": {
+      "displayName": "Valve Proton Source Seed",
+      "launcher": "proton",
+      "localImage": "winforge/proton",
+      "publishedImageName": "winforge-proton",
+      "dockerfile": "container/providers/proton/Dockerfile",
+      "buildArg": "PROTON_VERSION",
+      "defaultVersion": "10.0-4",
+      "notes": "Valve Proton source OCI seed — GitHub source archive; use proton-ge for a prebuilt Proton runtime.",
+      "versions": {
+        "10.0-4": {
+          "buildValue": "10.0-4",
+          "tag": "10.0-4",
+          "channel": "source-seed",
+          "ciBuild": true,
+          "runtimeUsable": false
+        }
+      }
+    },
+    "proton-ge": {
+      "displayName": "GE-Proton",
+      "launcher": "proton",
+      "localImage": "winforge/proton-ge",
+      "publishedImageName": "winforge-proton-ge",
+      "dockerfile": "container/providers/proton-ge/Dockerfile",
+      "buildArg": "GE_PROTON_TAG",
+      "defaultVersion": "GE-Proton9-27",
+      "notes": "GE-Proton OCI base — GloriousEggroll releases.",
+      "versions": {
+        "GE-Proton9-27": {
+          "buildValue": "GE-Proton9-27",
+          "tag": "GE-Proton9-27",
+          "channel": "ge-stable",
+          "ciBuild": true,
+          "runtimeUsable": true
+        }
+      }
+    }
+  }
+}

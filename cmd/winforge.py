@@ -34,13 +34,15 @@ def cmd_inspect(args):
 
 def cmd_plan(args):
     manifest = load_manifest(Path(args.manifest))
+    binding = resolve_runtime(manifest.runtime)
     result = {
         "manifest": manifest.name,
         "version": manifest.version,
-        "runtimeProvider": manifest.runtime.provider,
-        "runtimeVersion": manifest.runtime.version,
-        "ociImage": get_image_ref(manifest.runtime.provider,
-                                  manifest.runtime.version),
+        "runtimeProvider": binding.provider,
+        "runtimeVersion": binding.version,
+        "ociImage": binding.oci_image,
+        "localOciImage": binding.local_oci_image,
+        "runtimeUsable": binding.runtime_usable,
         "phases": build_plan(manifest),
     }
     print(json.dumps(result, indent=2))
@@ -53,8 +55,9 @@ def cmd_build(args):
         manifest, Path(args.output), dry_run=args.dry_run,
     )
 
-    base_image = get_image_ref(manifest.runtime.provider,
-                               manifest.runtime.version)
+    binding = resolve_runtime(manifest.runtime)
+    base_image = binding.oci_image or get_image_ref(
+        manifest.runtime.provider, manifest.runtime.version)
 
     if args.dry_run:
         oci = build_oci_image(bundle_path, base_image,
