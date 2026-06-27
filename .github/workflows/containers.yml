@@ -20,24 +20,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - provider: wine
             dockerfile: container/providers/wine/Dockerfile
             build_arg: WINE_VERSION=9.0
-            version: 9.0
+            version: "9.0"
           - provider: wine-staging
             dockerfile: container/providers/wine-staging/Dockerfile
             build_arg: WINE_VERSION=9.0
-            version: 9.0
+            version: "9.0"
           - provider: proton
             dockerfile: container/providers/proton/Dockerfile
             build_arg: PROTON_VERSION=9.0
-            version: 9.0
+            version: "9.0"
           - provider: proton-ge
             dockerfile: container/providers/proton-ge/Dockerfile
             build_arg: GE_PROTON_TAG=GE-Proton9-27
-            version: GE-Proton9-27
+            version: "GE-Proton9-27"
     steps:
       - uses: actions/checkout@v4
 
