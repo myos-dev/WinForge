@@ -41,7 +41,7 @@ if [ $# -eq 0 ]; then
     # Build all providers with default versions
     build_one wine "WINE_VERSION=9.0" container/providers/wine/Dockerfile 9.0
     build_one wine-staging "WINE_VERSION=9.0" container/providers/wine-staging/Dockerfile 9.0
-    build_one proton "PROTON_VERSION=9.0" container/providers/proton/Dockerfile 9.0
+    build_one proton "PROTON_VERSION=10.0-4" container/providers/proton/Dockerfile 10.0-4
     build_one proton-ge "GE_PROTON_TAG=GE-Proton9-27" container/providers/proton-ge/Dockerfile GE-Proton9-27
     echo "=== All containers built ==="
 elif [ $# -ge 2 ]; then

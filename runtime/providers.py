@@ -79,7 +79,7 @@ class ProtonProvider:
         return RuntimeBinding(
             spec.provider, spec.version, "proton",
             spec.source, spec.channel, spec.digest,
-            "Valve Proton OCI base — GitHub releases.",
+            "Valve Proton source OCI seed — GitHub source archive; use proton-ge for a prebuilt Proton runtime.",
             oci_image=oci,
         )
 

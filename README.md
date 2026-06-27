@@ -116,7 +116,7 @@ container/
 └── providers/
     ├── wine/Dockerfile               # Wine Stable (WineHQ apt)
     ├── wine-staging/Dockerfile       # Wine Staging (WineHQ apt)
-    ├── proton/Dockerfile             # Valve Proton (GitHub release)
+    ├── proton/Dockerfile             # Valve Proton source seed (GitHub source archive)
     └── proton-ge/Dockerfile          # GE-Proton (GitHub release)
 ```
 

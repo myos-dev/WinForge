@@ -42,8 +42,8 @@ services:
       context: ..
       dockerfile: container/providers/proton/Dockerfile
       args:
-        PROTON_VERSION: "9.0"
-    image: winforge/proton:9.0-dev
+        PROTON_VERSION: "10.0-4"
+    image: winforge/proton:10.0-4-dev
     environment:
       WINEFS: builder
     volumes:

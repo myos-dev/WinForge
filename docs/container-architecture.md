@@ -38,7 +38,7 @@ These images are the **base layer** on which WinForge builds prefixes, installs 
 |---|---|---|---|
 | Wine Stable | `winforge/wine:<version>` | WineHQ apt (`.deb`) | `WINE_VERSION` |
 | Wine Staging | `winforge/wine-staging:<version>` | WineHQ apt (`.deb`) | `WINE_VERSION` |
-| Valve Proton | `winforge/proton:<version>` | GitHub releases (`.tar.gz`) | `PROTON_VERSION` |
+| Valve Proton | `winforge/proton:<version>` | GitHub source archive (source seed) | `PROTON_VERSION` |
 | GE-Proton | `winforge/proton-ge:<tag>` | GitHub releases (`.tar.gz`) | `GE_PROTON_TAG` |
 
 ### Wine Stable / Staging

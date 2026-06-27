@@ -33,8 +33,8 @@ jobs:
             version: "9.0"
           - provider: proton
             dockerfile: container/providers/proton/Dockerfile
-            build_arg: PROTON_VERSION=9.0
-            version: "9.0"
+            build_arg: PROTON_VERSION=10.0-4
+            version: "10.0-4"
           - provider: proton-ge
             dockerfile: container/providers/proton-ge/Dockerfile
             build_arg: GE_PROTON_TAG=GE-Proton9-27
