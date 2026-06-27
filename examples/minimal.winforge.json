@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "winforge.dev/v0",
+  "name": "notepad-plus-plus-portable",
+  "version": "0.1.0",
+  "runtime": { "provider": "wine", "version": "9.0", "source": "registry.example/wine/wine-stable:9.0", "digest": "sha256:replace-with-runtime-artifact-digest" },
+  "dependencies": [ { "kind": "winetricks", "verbs": ["corefonts", "vcrun2022"] } ],
+  "install": [ { "kind": "portable", "source": "file://./sources/npp-portable.zip", "target": "C:/Program Files/Notepad++", "sha256": "replace-with-source-sha256" } ],
+  "filesystem": [ { "source": "./overlays/config.xml", "target": "C:/Program Files/Notepad++/config.xml", "sha256": "replace-with-overlay-sha256" } ],
+  "launch": { "entrypoint": "C:/Program Files/Notepad++/notepad++.exe", "args": [], "env": { "WINEDLLOVERRIDES": "mscoree,mshtml=disabled" }, "workingDirectory": "C:/Program Files/Notepad++" },
+  "provenance": { "sources": [ { "uri": "file://./sources/npp-portable.zip", "sha256": "replace-with-source-sha256" } ], "builder": { "name": "winforge", "schema": "winforge.dev/v0" } }
+}

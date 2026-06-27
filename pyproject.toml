@@ -1,0 +1,9 @@
+[project]
+name = "winforge"
+version = "0.0.0"
+description = "Reproducible build system for Wine-based Windows execution environments"
+requires-python = ">=3.11"
+readme = "README.md"
+
+[tool.winforge]
+schema_version = "winforge.dev/v0"

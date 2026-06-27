@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "winforge.dev/v0",
+  "name": "legacy-crm-client",
+  "version": "2026.06.0",
+  "runtime": { "provider": "proton-ge", "version": "GE-Proton9-27", "source": "https://example.invalid/proton-ge/GE-Proton9-27.tar.gz", "digest": "sha256:replace-with-proton-ge-digest" },
+  "dependencies": [ { "kind": "winetricks", "verbs": ["dotnet48", "vcrun2019", "corefonts"] }, { "kind": "runtime-component", "name": "odbc-driver", "version": "pinned-placeholder" } ],
+  "install": [ { "kind": "msi", "source": "file://./sources/LegacyCRM.msi", "args": ["/qn"], "sha256": "replace-with-msi-sha256" }, { "kind": "script", "command": "reg import C:/winforge/registry/legacy-crm.reg" } ],
+  "filesystem": [ { "source": "./registry/legacy-crm.reg", "target": "C:/winforge/registry/legacy-crm.reg", "sha256": "replace-with-registry-file-sha256" } ],
+  "launch": { "entrypoint": "C:/Program Files/LegacyCRM/LegacyCRM.exe", "args": ["--profile", "default"], "env": { "WINEDEBUG": "-all" }, "workingDirectory": "C:/Program Files/LegacyCRM" },
+  "provenance": { "sources": [ { "uri": "file://./sources/LegacyCRM.msi", "sha256": "replace-with-msi-sha256" } ], "notes": "Example only; no customer files or secrets belong in the public repo." }
+}
