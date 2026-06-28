@@ -45,6 +45,9 @@ RUN set -eux; \
     apt-get update -qq; \
     apt-get install -y -qq --no-install-recommends \
         "winehq-stable=${WINE_PACKAGE_VERSION}" \
+        "wine-stable=${WINE_PACKAGE_VERSION}" \
+        "wine-stable-amd64=${WINE_PACKAGE_VERSION}" \
+        "wine-stable-i386:i386=${WINE_PACKAGE_VERSION}" \
     ; \
     # Install winetricks
     curl -fsSL "https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks" \

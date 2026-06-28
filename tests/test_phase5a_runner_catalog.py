@@ -60,8 +60,14 @@ class Phase5ARunnerCatalogTests(unittest.TestCase):
 
         self.assertIn("ARG WINE_PACKAGE_VERSION=11.0.0.0~bookworm-1", wine)
         self.assertIn("winehq-stable=${WINE_PACKAGE_VERSION}", wine)
+        self.assertIn("wine-stable=${WINE_PACKAGE_VERSION}", wine)
+        self.assertIn("wine-stable-amd64=${WINE_PACKAGE_VERSION}", wine)
+        self.assertIn("wine-stable-i386:i386=${WINE_PACKAGE_VERSION}", wine)
         self.assertIn("ARG WINE_PACKAGE_VERSION=11.10~bookworm-1", staging)
         self.assertIn("winehq-staging=${WINE_PACKAGE_VERSION}", staging)
+        self.assertIn("wine-staging=${WINE_PACKAGE_VERSION}", staging)
+        self.assertIn("wine-staging-amd64=${WINE_PACKAGE_VERSION}", staging)
+        self.assertIn("wine-staging-i386:i386=${WINE_PACKAGE_VERSION}", staging)
 
 if __name__ == "__main__":
     unittest.main()

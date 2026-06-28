@@ -69,7 +69,7 @@ Current curated build matrix:
 
 ### Wine Stable / Staging
 
-Built from official WineHQ Debian packages pinned by exact package version. Architecture: amd64 + i386 (via multiarch).
+Built from official WineHQ Debian packages pinned by exact package version. Architecture: amd64 + i386 (via multiarch). Dockerfiles pin the WineHQ metapackage plus the matching root, amd64, and i386 packages so older exact package pins resolve under apt 3/buildx.
 
 ```
 Dockerfile structure:

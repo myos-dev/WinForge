@@ -39,6 +39,9 @@ RUN set -eux; \
     apt-get update -qq; \
     apt-get install -y -qq --no-install-recommends \
         "winehq-staging=${WINE_PACKAGE_VERSION}" \
+        "wine-staging=${WINE_PACKAGE_VERSION}" \
+        "wine-staging-amd64=${WINE_PACKAGE_VERSION}" \
+        "wine-staging-i386:i386=${WINE_PACKAGE_VERSION}" \
     ; \
     curl -fsSL "https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks" \
         -o /usr/local/bin/winetricks; \

@@ -27,14 +27,21 @@ WinForge does not mirror every upstream release. v0 carries a small curated supp
 
 ## Wine package pinning
 
-Wine and Wine Staging images must install exact WineHQ package versions from the catalog. Image tags alone are not enough. The catalog passes `WINE_PACKAGE_VERSION`, and Dockerfiles install:
+Wine and Wine Staging images must install exact WineHQ package versions from the catalog. Image tags alone are not enough. The catalog passes `WINE_PACKAGE_VERSION`, and Dockerfiles install the WineHQ metapackage plus the exact root and architecture packages:
 
 ```bash
 winehq-stable=${WINE_PACKAGE_VERSION}
+wine-stable=${WINE_PACKAGE_VERSION}
+wine-stable-amd64=${WINE_PACKAGE_VERSION}
+wine-stable-i386:i386=${WINE_PACKAGE_VERSION}
+
 winehq-staging=${WINE_PACKAGE_VERSION}
+wine-staging=${WINE_PACKAGE_VERSION}
+wine-staging-amd64=${WINE_PACKAGE_VERSION}
+wine-staging-i386:i386=${WINE_PACKAGE_VERSION}
 ```
 
-This prevents an image tagged `11.0` from accidentally installing whatever WineHQ currently serves as the default package.
+This prevents an image tagged `11.0` from accidentally installing whatever WineHQ currently serves as the default package. It also avoids apt 3 solver failures observed with older exact WineHQ metapackage pins, where `winehq-stable=10.0...` or `winehq-staging=11.9...` did not automatically select the matching exact root package candidate unless the root and arch packages were pinned explicitly.
 
 ## OCI tag policy
 
