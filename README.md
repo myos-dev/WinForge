@@ -56,6 +56,47 @@ application recipe (YAML, CLI-generated, or normalized JSON)
 └──────────────────────────────────────────────┘
 ```
 
+## Installation
+
+WinForge is installable as a Python command-line tool. The recommended myOS
+installation path is `uv tool install`; `pipx install` should work anywhere
+`pipx` is available.
+
+```bash
+# Preferred on myOS
+uv tool install "git+ssh://git@github.com/myos-dev/WinForge.git"
+
+# Alternative when pipx is installed
+pipx install "git+ssh://git@github.com/myos-dev/WinForge.git"
+```
+
+If your machine uses a Git SSH host alias, substitute the host in the URL:
+
+```bash
+uv tool install "git+ssh://git@github-noahgiroux/myos-dev/WinForge.git"
+pipx install "git+ssh://git@github-noahgiroux/myos-dev/WinForge.git"
+```
+
+Verify the installed console script:
+
+```bash
+winforge --help
+```
+
+If you are testing from a cloned repo, you can also inspect the included
+example recipe:
+
+```bash
+winforge inspect examples/notepad-plus-plus.winforge.yaml
+```
+
+For repo-local development, the legacy script path remains available:
+
+```bash
+python3 cmd/winforge.py --help
+python3 -m winforge --help
+```
+
 ## Quick Start
 
 ```bash
@@ -179,7 +220,9 @@ Detailed analysis in [docs/reference-study.md](docs/reference-study.md).
 
 ```
 WinForge/
-├── cmd/winforge.py              # CLI entrypoint
+├── pyproject.toml               # Python packaging metadata and console script
+├── winforge/                     # Installable CLI package (`winforge`)
+├── cmd/winforge.py              # Repo-local development shim
 ├── core/
 │   ├── manifest.py              # Manifest model, validation, loading
 │   ├── prefix.py                # Prefix abstraction
@@ -214,7 +257,14 @@ WinForge/
 # Run tests
 python3 -m unittest discover
 
-# Verify CLI works
+# Verify local tool installation
+TMP_UV_HOME="$(mktemp -d)"
+UV_TOOL_DIR="$TMP_UV_HOME/tools" UV_TOOL_BIN_DIR="$TMP_UV_HOME/bin" \
+  uv tool install --force .
+"$TMP_UV_HOME/bin/winforge" --help
+
+# Verify installed/package CLI works
+python3 -m winforge --help
 python3 cmd/winforge.py --help
 
 # Validate syntax of all Python files

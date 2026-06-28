@@ -1,9 +1,50 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "winforge"
-version = "0.0.0"
-description = "Reproducible build system for Wine-based Windows execution environments"
-requires-python = ">=3.11"
+version = "0.1.0"
+description = "Application-first packager and runner for Wine/Proton-family software"
 readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+  { name = "myOS-dev" }
+]
+keywords = ["wine", "proton", "oci", "packaging", "winforge"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Build Tools",
+  "Topic :: System :: Emulators",
+]
+
+[project.urls]
+Repository = "https://github.com/myos-dev/WinForge"
+
+[project.scripts]
+winforge = "winforge.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["winforge*", "artifact*", "builder*", "container*", "core*", "runtime*"]
+exclude = ["tests*", "docs*", "examples*", "cmd*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+runtime = ["catalog.json"]
+container = [
+  "build.sh",
+  "docker-compose.yml",
+  "common/*.sh",
+  "providers/*/Dockerfile",
+]
 
 [tool.winforge]
-schema_version = "winforge.dev/v0"
+schema_version = "winforge.app/v0"
