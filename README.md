@@ -110,13 +110,17 @@ winforge build examples/minimal.winforge.json --dry-run
 winforge bundle inspect dist/notepad-plus-plus-8.6.0
 winforge bundle verify dist/notepad-plus-plus-8.6.0
 
-# Preview and run the built application artifact
-winforge run --dry-run --graphics headless dist/notepad-plus-plus-8.6.0
-winforge run --graphics headless dist/notepad-plus-plus-8.6.0
+# Resolve built application artifacts by name from the local index
+winforge artifacts list
+winforge artifacts resolve notepad-plus-plus
+
+# Preview and run the built application artifact by app name or bundle path
+winforge run --dry-run --graphics headless notepad-plus-plus
+winforge run --graphics headless notepad-plus-plus
 winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/notepad-plus-plus-8.6.0
 
-# Export a runnable application OCI image
-winforge export oci dist/notepad-plus-plus-8.6.0 \
+# Export a runnable application OCI image by app name or bundle path
+winforge export oci notepad-plus-plus \
   --tag ghcr.io/myos-dev/winforge-app-notepad-plus-plus:8.6.0 \
   --dry-run
 winforge export oci dist/notepad-plus-plus-8.6.0 \
@@ -163,6 +167,31 @@ Current curated runner set:
 | `wine` | `latest`/`stable` -> `11.0`; `previous` -> `10.0`; `legacy` -> `9.0` | `11.0`, `10.0`, `9.0` |
 | `staging` | `latest`/`staging-latest` -> `11.10`; `previous` -> `11.9`; `baseline` -> `11.0` | `11.10`, `11.9`, `11.0` |
 | `umu-proton-ge` | `latest` -> `GE-Proton11-1`; `previous` -> `GE-Proton10-34`; `legacy` -> `GE-Proton9-27` | `GE-Proton11-1`, `GE-Proton10-34`, `GE-Proton9-27` |
+
+## Local Artifact Index
+
+`winforge build` registers materialized bundles in a local artifact index at:
+
+```text
+dist/.winforge/artifacts.json
+```
+
+The index uses `schemaVersion: winforge.artifact-index/v0` and maps app names
+and versions to verified bundle directories. This lets normal run/export flows
+use app references instead of requiring users to remember bundle paths:
+
+```bash
+winforge artifacts list
+winforge artifacts resolve my-app
+winforge artifacts resolve my-app@1.0.0
+
+winforge run --dry-run --graphics headless my-app
+winforge export oci my-app --tag ghcr.io/myos-dev/winforge-app-my-app:1.0.0 --dry-run
+```
+
+A bare app name resolves to the latest registered version for that application.
+Use `name@version` when a specific version is required. Direct bundle paths such
+as `dist/my-app-1.0.0` remain supported for debugging and automation.
 
 ## Running Built Artifacts
 
@@ -314,6 +343,7 @@ WinForge/
 │   ├── bundle.py                # Bundle writer (sealed artifact)
 │   ├── graph.py                 # Resolved execution graph writer
 │   ├── inspection.py            # Bundle inspect/verify contract checks
+│   ├── index.py                 # Local app-name artifact index
 │   ├── oci.py                   # Runnable application OCI export
 │   └── exporter.py              # Bundle export utilities
 ├── tests/                       # Unit tests

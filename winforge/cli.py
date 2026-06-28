@@ -12,6 +12,14 @@ from artifact.oci import (
     export_oci_image,
 )
 from artifact.inspection import inspect_bundle, verify_bundle
+from artifact.index import (
+    ArtifactIndexError,
+    default_index_path,
+    list_artifacts,
+    register_bundle,
+    resolve_artifact,
+    resolve_bundle_reference,
+)
 from builder.executor import execute_inside_container
 from builder.pipeline import build_plan
 from container.manager import (
@@ -70,11 +78,17 @@ def cmd_build(args):
         manifest.runtime.provider, manifest.runtime.version)
 
     if args.dry_run:
+        artifact_entry = register_bundle(
+            bundle_path,
+            index_path=default_index_path(Path(args.output)),
+        )
         oci = build_oci_image(bundle_path, base_image,
                               output_tag=args.image_tag)
         result = {
             "bundle": str(bundle_path),
             "graph": str(bundle_path / "metadata" / "graph.json"),
+            "artifactIndex": artifact_entry["indexPath"],
+            "artifact": artifact_entry,
             "dryRun": True,
             "baseImage": base_image,
             "ociImage": oci["outputTag"],
@@ -106,10 +120,16 @@ def cmd_build(args):
     # Write OCI mapping
     oci = build_oci_image(bundle_path, base_image,
                           output_tag=args.image_tag)
+    artifact_entry = register_bundle(
+        bundle_path,
+        index_path=default_index_path(Path(args.output)),
+    ) if build_result.success else None
 
     result = {
         "bundle": str(bundle_path),
         "graph": str(bundle_path / "metadata" / "graph.json"),
+        "artifactIndex": artifact_entry["indexPath"] if artifact_entry else str(default_index_path(Path(args.output))),
+        "artifact": artifact_entry,
         "dryRun": False,
         "baseImage": base_image,
         "ociImage": oci["outputTag"],
@@ -138,8 +158,9 @@ def cmd_build(args):
 # ---- run command ----
 
 def cmd_run(args):
+    bundle = resolve_bundle_reference(args.bundle, index_path=args.artifact_index)
     plan = build_run_plan(
-        Path(args.bundle),
+        bundle,
         graphics=args.graphics,
         engine=args.engine,
         vnc_port=args.vnc_port,
@@ -194,7 +215,7 @@ def cmd_bundle_verify(args):
 
 
 def cmd_export_oci(args):
-    bundle = Path(args.bundle)
+    bundle = resolve_bundle_reference(args.bundle, index_path=args.artifact_index)
     if args.dry_run:
         plan = create_oci_export_plan(bundle, tag=args.tag)
         print(json.dumps(plan, indent=2, sort_keys=True))
@@ -211,6 +232,20 @@ def cmd_export_oci(args):
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result.get("success") else 1
 
+
+
+# ---- artifact index commands ----
+
+def cmd_artifacts_list(args):
+    payload = list_artifacts(args.index)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_artifacts_resolve(args):
+    payload = resolve_artifact(args.reference, index_path=args.index)
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
 
 
 # ---- provider commands ----
@@ -285,7 +320,9 @@ def build_parser():
 
     # run
     p = sub.add_parser("run", help="Run a verified WinForge execution bundle")
-    p.add_argument("bundle", help="Path to WinForge bundle directory")
+    p.add_argument("bundle", help="Path to WinForge bundle directory or app name from artifact index")
+    p.add_argument("--artifact-index", default=None,
+                   help="Artifact index path for resolving app names (default: dist/.winforge/artifacts.json)")
     p.add_argument("--graphics", choices=["headless", "vnc"],
                    help="Graphics mode; defaults to metadata/graph.json defaultMode")
     p.add_argument("--engine", default=None,
@@ -339,12 +376,29 @@ def build_parser():
     bp.add_argument("bundle", help="Path to WinForge bundle directory")
     bp.set_defaults(func=cmd_bundle_verify)
 
+    # artifacts
+    p = sub.add_parser("artifacts", help="List and resolve locally indexed WinForge artifacts")
+    asub = p.add_subparsers(dest="artifacts_command", required=True)
+
+    ap = asub.add_parser("list", help="Print the local artifact index")
+    ap.add_argument("--index", default=None,
+                    help="Artifact index path (default: dist/.winforge/artifacts.json)")
+    ap.set_defaults(func=cmd_artifacts_list)
+
+    ap = asub.add_parser("resolve", help="Resolve app or app@version to a bundle")
+    ap.add_argument("reference", help="Artifact reference, e.g. notepad-plus-plus or notepad-plus-plus@8.6.0")
+    ap.add_argument("--index", default=None,
+                    help="Artifact index path (default: dist/.winforge/artifacts.json)")
+    ap.set_defaults(func=cmd_artifacts_resolve)
+
     # export
     p = sub.add_parser("export", help="Export WinForge bundles to deployable artifacts")
     esub = p.add_subparsers(dest="export_command", required=True)
 
     ep = esub.add_parser("oci", help="Export a verified bundle as a runnable OCI application image")
-    ep.add_argument("bundle", help="Path to WinForge bundle directory")
+    ep.add_argument("bundle", help="Path to WinForge bundle directory or app name from artifact index")
+    ep.add_argument("--artifact-index", default=None,
+                    help="Artifact index path for resolving app names (default: dist/.winforge/artifacts.json)")
     ep.add_argument("--tag", required=True, help="Output OCI image tag")
     ep.add_argument("--dry-run", action="store_true", help="Print the OCI export plan without building")
     ep.add_argument("--engine", default=None, help="Container build engine (podman, docker). Auto-detect if omitted.")
@@ -379,6 +433,9 @@ def main(argv=None):
     except OCIExportError as exc:
         print(f"winforge: export error: {exc}", file=sys.stderr)
         return 5
+    except ArtifactIndexError as exc:
+        print(f"winforge: artifact index error: {exc}", file=sys.stderr)
+        return 6
     except KeyboardInterrupt:
         print("", file=sys.stderr)
         return 130

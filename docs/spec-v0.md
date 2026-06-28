@@ -98,7 +98,7 @@ The graph should not become a general runtime scheduler. Runtime should be borin
 
 ## Bundle run contract
 
-`winforge run <bundle>` currently consumes a verified bundle and must fail before container planning when `winforge bundle verify <bundle>` would fail.
+`winforge run <bundle-or-app-ref>` consumes a verified bundle, either directly by path or resolved through the local artifact index, and must fail before container planning when `winforge bundle verify <bundle>` would fail.
 
 `winforge run --dry-run <bundle>` prints a `winforge.run-plan/v0` document containing the selected runtime image, graphics mode, launch command, container environment, and container argv without starting the container.
 
@@ -108,9 +108,9 @@ The v0 runner mounts the bundle read-only at `/opt/winforge/bundle`, copies `pre
 
 ## OCI application image export
 
-`winforge export oci <bundle> --tag <image> --dry-run` consumes a verified bundle and emits a `winforge.oci-export-plan/v0` document. The plan includes the graph-resolved runtime base image, application identity, requested and resolved runtime versions, OCI labels, `metadata/artifact.json` content, image layout, and generated `Containerfile` content.
+`winforge export oci <bundle-or-app-ref> --tag <image> --dry-run` consumes a verified bundle, either directly by path or resolved through the local artifact index, and emits a `winforge.oci-export-plan/v0` document. The plan includes the graph-resolved runtime base image, application identity, requested and resolved runtime versions, OCI labels, `metadata/artifact.json` content, image layout, and generated `Containerfile` content.
 
-`winforge export oci <bundle> --tag <image>` stages a build context and runs `podman build` or `docker build`. The source bundle is not mutated; export writes `metadata/artifact.json` into the staged copy.
+`winforge export oci <bundle-or-app-ref> --tag <image>` stages a build context and runs `podman build` or `docker build`. The source bundle is not mutated; export writes `metadata/artifact.json` into the staged copy.
 
 The runnable application image layout is:
 
