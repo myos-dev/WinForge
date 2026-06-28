@@ -187,7 +187,8 @@ class OCIExportBuildTests(unittest.TestCase):
         command = result["command"]
         self.assertEqual(command[0:2], ["docker", "build"])
         self.assertIn("-f", command)
-        self.assertIn("Containerfile", command)
+        dockerfile_arg = command[command.index("-f") + 1]
+        self.assertTrue(dockerfile_arg.endswith("context/Containerfile"), dockerfile_arg)
         self.assertIn("-t", command)
         self.assertIn("oci-demo-app:1.2.3", command)
         self.assertTrue(command[-1].endswith("context"))

@@ -153,7 +153,8 @@ def export_oci_image(
         plan,
         Path(context_dir) if context_dir is not None else Path(tempfile.mkdtemp(prefix='winforge-oci-')),
     )
-    command = [selected_engine, 'build', '-f', 'Containerfile', '-t', tag, str(context)]
+    containerfile_path = context / plan['containerfile']['path']
+    command = [selected_engine, 'build', '-f', str(containerfile_path), '-t', tag, str(context)]
     try:
         proc = subprocess.run(
             command,
