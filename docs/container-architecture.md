@@ -140,6 +140,13 @@ winforge bundle verify dist/notepad-plus-plus-portable-0.1.0
 winforge run --dry-run --graphics headless dist/notepad-plus-plus-portable-0.1.0
 winforge run --graphics headless dist/notepad-plus-plus-portable-0.1.0
 winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/notepad-plus-plus-portable-0.1.0
+
+# Export the verified bundle as a runnable application OCI image
+winforge export oci dist/notepad-plus-plus-portable-0.1.0 \
+  --tag ghcr.io/myos-dev/winforge-app-notepad-plus-plus:0.1.0 \
+  --dry-run
+winforge export oci dist/notepad-plus-plus-portable-0.1.0 \
+  --tag ghcr.io/myos-dev/winforge-app-notepad-plus-plus:0.1.0
 ```
 
 ## Runtime Binding
@@ -147,6 +154,8 @@ winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/notepad-plus-
 When a manifest is resolved, `RuntimeBinding.oci_image` contains the published GHCR image reference and `RuntimeBinding.local_oci_image` contains the local developer tag. Both are produced from `runtime/catalog.json` through `runtime/providers.py`.
 
 The `plan` and `build` CLI commands automatically resolve the catalog-backed OCI image reference and include it in their output. `build` also writes `metadata/graph.json` so later `run`/OCI/kube commands can consume the resolved runtime and launch contract without reinterpreting the manifest. `winforge run` consumes that graph, verifies exact runtime consistency, mounts the bundle read-only, copies the prefix to an ephemeral runtime prefix, and launches through the catalog-resolved runtime image.
+
+`winforge export oci` also consumes the graph. It uses `runnerRuntime.image` as the application image base, writes `metadata/artifact.json` into a staged bundle copy, adds `winforge-app-launch`, and builds a runnable image whose mutable paths are `/var/lib/winforge/state` and `/exports`.
 
 ## Consumption by VIC (future)
 

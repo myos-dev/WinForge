@@ -46,7 +46,7 @@ application recipe (YAML, CLI-generated, or normalized JSON)
 ┌──────────────────────────────────────────────┐
 │ Application Artifact                           │
 │ built prefix + launch contract + metadata      │
-│ bundle dir today, OCI image digest direction   │
+│ bundle dir today, runnable OCI image export   │
 └──────────────────────────────────────────────┘
        │
        ▼
@@ -115,6 +115,13 @@ winforge run --dry-run --graphics headless dist/notepad-plus-plus-8.6.0
 winforge run --graphics headless dist/notepad-plus-plus-8.6.0
 winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/notepad-plus-plus-8.6.0
 
+# Export a runnable application OCI image
+winforge export oci dist/notepad-plus-plus-8.6.0 \
+  --tag ghcr.io/myos-dev/winforge-app-notepad-plus-plus:8.6.0 \
+  --dry-run
+winforge export oci dist/notepad-plus-plus-8.6.0 \
+  --tag ghcr.io/myos-dev/winforge-app-notepad-plus-plus:8.6.0
+
 # List available runtime providers
 winforge providers
 ```
@@ -178,6 +185,41 @@ winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/my-app-1.0.0
 For v0, the bundle is mounted read-only at `/opt/winforge/bundle`; the prefix
 is copied to `/tmp/winforge-prefix` before launch so normal Wine runtime
 mutation does not alter the sealed bundle artifact.
+
+## OCI Application Image Export
+
+`winforge export oci` consumes a verified bundle and turns it into a runnable
+application OCI image. Dry-run mode prints the `winforge.oci-export-plan/v0`
+contract without requiring Docker or Podman:
+
+```bash
+winforge export oci dist/my-app-1.0.0 \
+  --tag ghcr.io/myos-dev/winforge-app-my-app:1.0.0 \
+  --dry-run
+```
+
+Real export stages a build context, writes `metadata/artifact.json` into the
+staged bundle copy, generates a `Containerfile`, adds
+`/usr/local/bin/winforge-app-launch`, then runs the selected build engine:
+
+```bash
+winforge export oci dist/my-app-1.0.0 \
+  --tag ghcr.io/myos-dev/winforge-app-my-app:1.0.0 \
+  --engine docker
+```
+
+The source bundle is not mutated. The image layout is:
+
+```text
+/opt/winforge/bundle      immutable embedded bundle
+/var/lib/winforge/state   mutable runtime state
+/exports                  explicit app/user outputs
+/usr/local/bin/winforge-app-launch
+```
+
+The embedded artifact metadata uses `schemaVersion: winforge.artifact-image/v0`
+and records requested/resolved runtime versions, runner, launcher, base image,
+launch contract, graphics contract, state path, and exports path.
 
 ## WinForge WINE Container
 
@@ -272,7 +314,7 @@ WinForge/
 │   ├── bundle.py                # Bundle writer (sealed artifact)
 │   ├── graph.py                 # Resolved execution graph writer
 │   ├── inspection.py            # Bundle inspect/verify contract checks
-│   ├── oci.py                   # OCI image mapping & layering
+│   ├── oci.py                   # Runnable application OCI export
 │   └── exporter.py              # Bundle export utilities
 ├── tests/                       # Unit tests
 ├── docs/                        # Architecture docs, ADRs

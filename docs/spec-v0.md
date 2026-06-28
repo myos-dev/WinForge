@@ -106,6 +106,19 @@ The graph should not become a general runtime scheduler. Runtime should be borin
 
 The v0 runner mounts the bundle read-only at `/opt/winforge/bundle`, copies `prefix/` to `/tmp/winforge-prefix`, sets `WINEPREFIX` to that copy, then launches the application entrypoint. This preserves the sealed artifact while allowing Wine to mutate runtime state.
 
-## OCI mapping
+## OCI application image export
 
-OCI should become the canonical deployable artifact identity by digest. Embedded WinForge metadata describes artifact semantics. OCI labels should match embedded metadata; a mismatch should fail verification.
+`winforge export oci <bundle> --tag <image> --dry-run` consumes a verified bundle and emits a `winforge.oci-export-plan/v0` document. The plan includes the graph-resolved runtime base image, application identity, requested and resolved runtime versions, OCI labels, `metadata/artifact.json` content, image layout, and generated `Containerfile` content.
+
+`winforge export oci <bundle> --tag <image>` stages a build context and runs `podman build` or `docker build`. The source bundle is not mutated; export writes `metadata/artifact.json` into the staged copy.
+
+The runnable application image layout is:
+
+```text
+/opt/winforge/bundle      immutable embedded bundle
+/var/lib/winforge/state   mutable runtime state / copied prefix
+/exports                  explicit app/user outputs
+/usr/local/bin/winforge-app-launch
+```
+
+Embedded artifact metadata uses `schemaVersion: winforge.artifact-image/v0`. OCI labels mirror core metadata such as app name/version, runtime provider, requested/resolved runtime version, runner, launcher, and base image. OCI image digests are the deployable identity; embedded WinForge metadata describes artifact semantics. A future verification command should fail if labels and embedded metadata disagree.

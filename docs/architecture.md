@@ -52,7 +52,13 @@ The deterministic pipeline is `init-prefix`, `install-dependencies`, `install-ap
 
 `runtime/launcher.py` implements the current `winforge run` path. It consumes verified bundle output, emits `winforge.run-plan/v0` for dry runs, and executes the plan with Podman/Docker when not in dry-run mode. Headless mode uses Xvfb without host ports; VNC mode exposes loopback-only VNC/noVNC ports and starts `x11vnc` plus `websockify` inside the runtime container. Bundles are mounted read-only and prefixes are copied before launch so runtime mutation affects state, not the sealed artifact.
 
-### 8. Kubernetes / OCI integration
+### 8. OCI application export
+
+`artifact/oci.py` implements `winforge export oci`. It consumes a verified bundle, emits `winforge.oci-export-plan/v0` in dry-run mode, stages a build context with a copied bundle plus `metadata/artifact.json`, generates a runnable app `Containerfile`, and builds with Podman/Docker when not in dry-run mode.
+
+Exported images are based on the graph-resolved runtime image and embed the bundle at `/opt/winforge/bundle`. Runtime state and exports are separate at `/var/lib/winforge/state` and `/exports`.
+
+### 9. Kubernetes integration
 
 WinForge supports OCI output for distribution and Kubernetes execution as a downstream substrate, but WinForge must not depend on Kubernetes internally.
 

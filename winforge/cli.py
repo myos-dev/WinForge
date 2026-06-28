@@ -5,7 +5,12 @@ import argparse, json, sys
 from pathlib import Path
 
 from artifact.bundle import create_bundle
-from artifact.oci import build_oci_image
+from artifact.oci import (
+    OCIExportError,
+    build_oci_image,
+    create_oci_export_plan,
+    export_oci_image,
+)
 from artifact.inspection import inspect_bundle, verify_bundle
 from builder.executor import execute_inside_container
 from builder.pipeline import build_plan
@@ -188,6 +193,25 @@ def cmd_bundle_verify(args):
     return 0 if result["valid"] else 1
 
 
+def cmd_export_oci(args):
+    bundle = Path(args.bundle)
+    if args.dry_run:
+        plan = create_oci_export_plan(bundle, tag=args.tag)
+        print(json.dumps(plan, indent=2, sort_keys=True))
+        return 0
+
+    result = export_oci_image(
+        bundle,
+        tag=args.tag,
+        engine=args.engine,
+        context_dir=Path(args.context_dir) if args.context_dir else None,
+        timeout=args.timeout,
+        push=args.push,
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result.get("success") else 1
+
+
 
 # ---- provider commands ----
 
@@ -315,6 +339,20 @@ def build_parser():
     bp.add_argument("bundle", help="Path to WinForge bundle directory")
     bp.set_defaults(func=cmd_bundle_verify)
 
+    # export
+    p = sub.add_parser("export", help="Export WinForge bundles to deployable artifacts")
+    esub = p.add_subparsers(dest="export_command", required=True)
+
+    ep = esub.add_parser("oci", help="Export a verified bundle as a runnable OCI application image")
+    ep.add_argument("bundle", help="Path to WinForge bundle directory")
+    ep.add_argument("--tag", required=True, help="Output OCI image tag")
+    ep.add_argument("--dry-run", action="store_true", help="Print the OCI export plan without building")
+    ep.add_argument("--engine", default=None, help="Container build engine (podman, docker). Auto-detect if omitted.")
+    ep.add_argument("--context-dir", help="Optional build context directory to materialize")
+    ep.add_argument("--timeout", type=int, default=600, help="Max seconds for image build/push commands")
+    ep.add_argument("--push", action="store_true", help="Push the image after a successful local build")
+    ep.set_defaults(func=cmd_export_oci)
+
     # providers
     p = sub.add_parser("providers", help="List available runtime providers")
     p.add_argument("--version", default="latest",
@@ -338,6 +376,9 @@ def main(argv=None):
     except RunError as exc:
         print(f"winforge: run error: {exc}", file=sys.stderr)
         return 4
+    except OCIExportError as exc:
+        print(f"winforge: export error: {exc}", file=sys.stderr)
+        return 5
     except KeyboardInterrupt:
         print("", file=sys.stderr)
         return 130
