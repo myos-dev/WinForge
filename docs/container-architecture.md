@@ -48,7 +48,7 @@ where `ciBuild` is true.
 |---|---|---|---|---|
 | Wine Stable | `winforge/wine:<version>` | `ghcr.io/myos-dev/winforge-wine:<version>` | WineHQ apt (`.deb`) | `WINE_VERSION` |
 | Wine Staging | `winforge/wine-staging:<version>` | `ghcr.io/myos-dev/winforge-wine-staging:<version>` | WineHQ apt (`.deb`) | `WINE_VERSION` |
-| GE-Proton | `winforge/proton-ge:<tag>` | `ghcr.io/myos-dev/winforge-proton-ge:<tag>` | GitHub releases (`.tar.gz`) | `GE_PROTON_TAG` |
+| UMU + GE-Proton | `winforge/umu-proton-ge:<tag>` | `ghcr.io/myos-dev/winforge-umu-proton-ge:<tag>` | GE-Proton GitHub release + UMU launcher | `GE_PROTON_TAG` |
 
 ### Wine Stable / Staging
 
@@ -62,20 +62,21 @@ Dockerfile structure:
   Stage 4 (final)     — entrypoint, env vars, workdir
 ```
 
-### GE-Proton
+### UMU + GE-Proton
 
-`winforge/proton-ge` is the active Proton-family runtime today. It downloads
-GE-Proton release tarballs from GitHub and extracts them into `/opt/proton-ge`.
-Valve Proton is intentionally not an active v0 provider because upstream
-GitHub releases are source-only; add it later only with a real runnable
-binary acquisition path.
+`winforge/umu-proton-ge` is the active Proton-family runtime today. It installs
+UMU as the launcher (`umu-run`) and downloads the selected GE-Proton runner
+release from GitHub into `/opt/proton-ge`. Valve Proton is intentionally not an
+active v0 provider because upstream GitHub releases are source-only; add it
+later only with a real runnable binary acquisition path.
 
 ```
 Dockerfile structure:
   Stage 1 (base)      — Debian Bookworm Slim + i386 multiarch where needed
   Stage 2 (download)  — curl GE-Proton release tarball + optional checksum verify
   Stage 3 (extract)   — tar to /opt/proton-ge
-  Stage 4 (final)     — entrypoint, STEAM_COMPAT env, workdir
+  Stage 4 (UMU)       — install pinned umu-launcher and expose umu-run
+  Stage 5 (final)     — entrypoint, STEAM_COMPAT env, workdir
 ```
 
 ## Entrypoint Chain

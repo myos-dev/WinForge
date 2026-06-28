@@ -1,19 +1,21 @@
 # syntax=docker/dockerfile:1
-# WinForge GE-Proton OCI Base
+# WinForge UMU + GE-Proton OCI Base
 #
-# Produces the winforge/proton-ge:<tag> image — GloriousEggroll's
-# Proton-GE runtime, built from community releases.
+# Produces the winforge/umu-proton-ge:<tag> image — GloriousEggroll's
+# GE-Proton runner stack, built from community releases and launched through the UMU capability contract.
 #
 # Build:
 #   docker build \
 #     --build-arg GE_PROTON_TAG=GE-Proton9-27 \
 #     --build-arg GE_PROTON_SHA256=replace-with-actual-sha256 \
-#     -t winforge/proton-ge:GE-Proton9-27 \
-#     -f container/providers/proton-ge/Dockerfile .
+#     --build-arg UMU_LAUNCHER_REF=1.4.0 \
+#     -t winforge/umu-proton-ge:GE-Proton9-27 \
+#     -f container/providers/umu-proton-ge/Dockerfile .
 
 ARG GE_PROTON_TAG=GE-Proton9-27
 ARG GE_PROTON_URL=https://github.com/GloriousEggroll/proton-ge-custom/releases/download/${GE_PROTON_TAG}/${GE_PROTON_TAG}.tar.gz
 ARG GE_PROTON_SHA256=unverified
+ARG UMU_LAUNCHER_REF=1.4.0
 
 FROM debian:bookworm-slim AS base
 
@@ -24,7 +26,7 @@ RUN set -eux; \
         ca-certificates curl \
         xvfb x11-utils xauth x11vnc websockify novnc \
         cabextract p7zip-full unzip bzip2 xz-utils \
-        python3 \
+        git python3 python3-venv \
     ; \
     rm -rf /var/lib/apt/lists/*
 
@@ -45,10 +47,19 @@ RUN set -eux; \
     rm proton-ge.tar.gz
 
 FROM ge-download
+ARG UMU_LAUNCHER_REF
+RUN set -eux; \
+    python3 -m venv /opt/umu; \
+    /opt/umu/bin/pip install --no-cache-dir --upgrade pip; \
+    /opt/umu/bin/pip install --no-cache-dir "git+https://github.com/Open-Wine-Components/umu-launcher.git@${UMU_LAUNCHER_REF}"; \
+    test -x /opt/umu/bin/umu-run; \
+    ln -s /opt/umu/bin/umu-run /usr/local/bin/umu-run; \
+    /usr/local/bin/umu-run --help >/tmp/umu-run-help.txt
 ENV WINFORGE_ROOT=/opt/winforge WINEPREFIX=/opt/winforge/prefix \
     STEAM_COMPAT_DATA_PATH=/opt/winforge/prefix \
     STEAM_COMPAT_CLIENT_INSTALL_PATH=/opt/winforge \
     PROTONPATH=/opt/proton-ge \
+    PATH=/opt/umu/bin:$PATH \
     WINEDEBUG=-all DISPLAY=:99
 COPY container/common/xvfb-entrypoint.sh /usr/local/bin/xvfb-entrypoint.sh
 RUN chmod +x /usr/local/bin/xvfb-entrypoint.sh

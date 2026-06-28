@@ -251,6 +251,8 @@ def _launch_command(runtime: dict[str, Any], launch: dict[str, Any]) -> list[str
     launcher = str(runtime.get("launcher") or "wine")
     if launcher == "proton":
         return ["/opt/proton-ge/proton", "run", entrypoint, *args]
+    if launcher == "umu":
+        return ["umu-run", entrypoint, *args]
     return [launcher, entrypoint, *args]
 
 

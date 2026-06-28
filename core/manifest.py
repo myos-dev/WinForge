@@ -11,7 +11,7 @@ SCHEMA_VERSION = "winforge.app/v0"
 LEGACY_SCHEMA_VERSION = "winforge.dev/v0"
 SUPPORTED_SCHEMA_VERSIONS = {SCHEMA_VERSION, LEGACY_SCHEMA_VERSION}
 
-ALLOWED_RUNTIME_PROVIDERS = {"wine", "staging", "proton-ge"}
+ALLOWED_RUNTIME_PROVIDERS = {"wine", "staging", "umu-proton-ge"}
 ALLOWED_DEPENDENCY_KINDS = {"winetricks", "font", "directx", "package", "runtime-component"}
 ALLOWED_INSTALL_KINDS = {"msi", "exe", "portable", "choco", "script"}
 

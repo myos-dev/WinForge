@@ -2,7 +2,7 @@
 
 Date: 2026-06-27
 
-Status: accepted (amended by Decision 0003)
+Status: accepted (amended by Decisions 0003 and 0004)
 
 ## Decision
 
@@ -10,16 +10,16 @@ WinForge follows a Ramalama-like model: user commands resolve a runtime provider
 
 WinForge has two distinct OCI roles:
 
-1. **Runtime image** — e.g. `ghcr.io/myos-dev/winforge-wine:9.0`; provides Wine/Staging/GE-Proton runtime, tools, entrypoints, and graphics support.
+1. **Runtime image** — e.g. `ghcr.io/myos-dev/winforge-wine:9.0`; provides Wine/Staging/UMU+GE-Proton runtime, tools, entrypoints, and graphics support.
 2. **Application/prefix artifact** — the future OCI wrapper for a resolved WinForge execution bundle containing prefix state, launch contract, graph metadata, and provenance.
 
 The active v0 runtime providers are:
 
 - `wine`
 - `staging`
-- `proton-ge`
+- `umu-proton-ge`
 
-Valve Proton is removed as an active provider for now because upstream GitHub releases are source-only and do not provide a prebuilt runnable Proton runtime. Proton-GE remains the active Proton-family runtime. Other runners can be added later through the catalog.
+Valve Proton is removed as an active provider for now because upstream GitHub releases are source-only and do not provide a prebuilt runnable Proton runtime. `umu-proton-ge` is the active Proton-family stack: UMU is the launcher and GE-Proton is the runner/version. Other runners can be added later through the catalog.
 
 ## Scope
 
@@ -44,4 +44,4 @@ For Wine, the divergence is that prefixes are stateful OS-like artifacts, so the
 
 ## Review triggers
 
-Review this decision when WinForge adds a real Valve Proton binary acquisition path, introduces new non-GE Proton-family runners, or starts implementing production orchestration beyond local/devops/kube-manifest flows.
+Review this decision when WinForge adds a real Valve Proton binary acquisition path, introduces new Proton-family launchers/runners beyond UMU+GE-Proton, or starts implementing production orchestration beyond local/devops/kube-manifest flows.

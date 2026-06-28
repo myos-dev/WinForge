@@ -133,12 +133,34 @@ class Phase3ExecutionPlanTests(unittest.TestCase):
         self.assertEqual(payload["graphics"]["mode"], "headless")
         self.assertEqual(payload["container"]["engine"], "podman")
 
+
+    def test_umu_proton_ge_run_plan_uses_umu_launcher(self):
+        data = dict(VALID)
+        data["runtime"] = {"provider": "umu-proton-ge", "version": "GE-Proton9-27"}
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle = create_bundle(Manifest.from_dict(data), Path(tmp), dry_run=True)
+            plan = build_run_plan(bundle, graphics="headless", engine="podman")
+
+        self.assertEqual(plan["runtime"]["provider"], "umu-proton-ge")
+        self.assertEqual(plan["runtime"]["launcher"], "umu")
+        self.assertEqual(plan["runtime"]["image"], "ghcr.io/myos-dev/winforge-umu-proton-ge:GE-Proton9-27")
+        self.assertIn("umu-run", plan["launchCommand"])
+
+
+    def test_umu_proton_ge_image_installs_umu_launcher(self):
+        root = Path(__file__).resolve().parents[1]
+        dockerfile = (root / "container/providers/umu-proton-ge/Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("umu-launcher", dockerfile)
+        self.assertIn("umu-run", dockerfile)
+        self.assertIn("UMU_LAUNCHER_REF", dockerfile)
+        self.assertIn("test -x /opt/umu/bin/umu-run", dockerfile)
+
     def test_runtime_container_images_include_vnc_helpers(self):
         root = Path(__file__).resolve().parents[1]
         dockerfiles = [
             "container/providers/wine/Dockerfile",
             "container/providers/wine-staging/Dockerfile",
-            "container/providers/proton-ge/Dockerfile",
+            "container/providers/umu-proton-ge/Dockerfile",
         ]
         for rel in dockerfiles:
             with self.subTest(rel=rel):

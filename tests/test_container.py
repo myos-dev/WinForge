@@ -17,15 +17,16 @@ class ContainerManagerTests(unittest.TestCase):
         self.assertIn("wine", names)
         self.assertIn("staging", names)
         self.assertNotIn("proton", names)
-        self.assertIn("proton-ge", names)
+        self.assertIn("umu-proton-ge", names)
+        self.assertNotIn("proton-ge", names)
 
     def test_get_image_ref_known_provider_returns_published_ref(self):
         self.assertEqual(get_image_ref("wine", "9.0"),
                          "ghcr.io/myos-dev/winforge-wine:9.0")
         self.assertEqual(get_image_ref("staging", "9.0"),
                          "ghcr.io/myos-dev/winforge-wine-staging:9.0")
-        self.assertEqual(get_image_ref("proton-ge", "GE-Proton9-27"),
-                         "ghcr.io/myos-dev/winforge-proton-ge:GE-Proton9-27")
+        self.assertEqual(get_image_ref("umu-proton-ge", "GE-Proton9-27"),
+                         "ghcr.io/myos-dev/winforge-umu-proton-ge:GE-Proton9-27")
 
     def test_get_local_image_ref_known_provider(self):
         self.assertEqual(get_local_image_ref("wine", "9.0"),
@@ -58,7 +59,7 @@ class RuntimeCatalogTests(unittest.TestCase):
         matrix = ci_matrix()
         self.assertIn("include", matrix)
         providers = {entry["provider"] for entry in matrix["include"]}
-        self.assertEqual(providers, {"wine", "staging", "proton-ge"})
+        self.assertEqual(providers, {"wine", "staging", "umu-proton-ge"})
         for entry in matrix["include"]:
             self.assertIn("dockerfile", entry)
             self.assertIn("build_arg", entry)
@@ -74,9 +75,10 @@ class RuntimeCatalogTests(unittest.TestCase):
         self.assertEqual(entry.published_ref,
                          "ghcr.io/myos-dev/winforge-wine:9.0")
 
-    def test_valve_proton_is_not_active_provider(self):
+    def test_valve_proton_and_legacy_proton_ge_are_not_active_providers(self):
         from runtime.catalog import resolve_catalog_version
         self.assertIsNone(resolve_catalog_version("proton", "default"))
+        self.assertIsNone(resolve_catalog_version("proton-ge", "default"))
 
 
 class RuntimeProviderOCITests(unittest.TestCase):
@@ -104,28 +106,29 @@ class RuntimeProviderOCITests(unittest.TestCase):
         self.assertEqual(binding.local_oci_image,
                          "winforge/wine-staging:9.0")
 
-    def test_runtime_binding_oci_image_proton_ge(self):
+    def test_runtime_binding_oci_image_umu_proton_ge(self):
         from core.manifest import RuntimeSpec
         from runtime.providers import resolve_runtime
         binding = resolve_runtime(RuntimeSpec(
-            provider="proton-ge", version="GE-Proton9-27",
+            provider="umu-proton-ge", version="GE-Proton9-27",
         ))
         self.assertEqual(binding.oci_image,
-                         "ghcr.io/myos-dev/winforge-proton-ge:GE-Proton9-27")
+                         "ghcr.io/myos-dev/winforge-umu-proton-ge:GE-Proton9-27")
         self.assertEqual(binding.local_oci_image,
-                         "winforge/proton-ge:GE-Proton9-27")
+                         "winforge/umu-proton-ge:GE-Proton9-27")
+        self.assertEqual(binding.launcher, "umu")
 
     def test_oci_image_in_to_dict(self):
         from core.manifest import RuntimeSpec
         from runtime.providers import resolve_runtime
         binding = resolve_runtime(RuntimeSpec(
-            provider="proton-ge", version="GE-Proton9-27",
+            provider="umu-proton-ge", version="GE-Proton9-27",
         ))
         d = binding.to_dict()
         self.assertIn("ociImage", d)
         self.assertIn("localOciImage", d)
         self.assertEqual(d["ociImage"],
-                         "ghcr.io/myos-dev/winforge-proton-ge:GE-Proton9-27")
+                         "ghcr.io/myos-dev/winforge-umu-proton-ge:GE-Proton9-27")
         self.assertTrue(d["runtimeUsable"])
 
     def test_to_dict_omits_none_oci(self):

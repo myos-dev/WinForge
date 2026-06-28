@@ -40,15 +40,15 @@
         }
       }
     },
-    "proton-ge": {
-      "displayName": "GE-Proton",
-      "launcher": "proton",
-      "localImage": "winforge/proton-ge",
-      "publishedImageName": "winforge-proton-ge",
-      "dockerfile": "container/providers/proton-ge/Dockerfile",
+    "umu-proton-ge": {
+      "displayName": "UMU + GE-Proton",
+      "launcher": "umu",
+      "localImage": "winforge/umu-proton-ge",
+      "publishedImageName": "winforge-umu-proton-ge",
+      "dockerfile": "container/providers/umu-proton-ge/Dockerfile",
       "buildArg": "GE_PROTON_TAG",
       "defaultVersion": "GE-Proton9-27",
-      "notes": "GE-Proton OCI base \u2014 GloriousEggroll releases.",
+      "notes": "UMU launcher stack for GE-Proton runner releases.",
       "versions": {
         "GE-Proton9-27": {
           "buildValue": "GE-Proton9-27",

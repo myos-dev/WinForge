@@ -17,7 +17,7 @@ provenance tracking. WinForge replaces that with:
 - **Deterministic builds** — Same manifest + same runtime = same bundle
 - **Immutable artifacts** — Sealed after construction, no drift
 - **Provenance recording** — Sources, hashes, versions tracked in metadata
-- **Runtime abstraction** — Swap Wine, Wine-Staging, or GE-Proton
+- **Runtime abstraction** — Swap Wine, Wine-Staging, or UMU-backed GE-Proton
   without changing the manifest
 - **OCI-native direction** — Application artifacts can be distributed and deployed as OCI images
 
@@ -174,8 +174,8 @@ winforge container build wine 9.0
 # Build Wine Staging
 winforge container build staging 9.0
 
-# Build GE-Proton prebuilt runtime
-winforge container build proton-ge GE-Proton9-27
+# Build UMU + GE-Proton runtime
+winforge container build umu-proton-ge GE-Proton9-27
 
 # Get the published OCI image reference for a provider+version
 winforge container ref wine 9.0
@@ -198,7 +198,7 @@ container/
 └── providers/
     ├── wine/Dockerfile               # Wine Stable (WineHQ apt)
     ├── wine-staging/Dockerfile       # Wine Staging (WineHQ apt)
-    └── proton-ge/Dockerfile          # GE-Proton (GitHub release)
+    └── umu-proton-ge/Dockerfile      # UMU + GE-Proton stack
 ```
 
 ## Reference Repos
@@ -259,8 +259,8 @@ python3 -m unittest discover
 
 # Verify local tool installation
 TMP_UV_HOME="$(mktemp -d)"
-UV_TOOL_DIR="$TMP_UV_HOME/tools" UV_TOOL_BIN_DIR="$TMP_UV_HOME/bin" \
-  uv tool install --force .
+UV_LINK_MODE=copy UV_TOOL_DIR="$TMP_UV_HOME/tools" UV_TOOL_BIN_DIR="$TMP_UV_HOME/bin" \
+  uv tool install --force --reinstall --refresh .
 "$TMP_UV_HOME/bin/winforge" --help
 
 # Verify installed/package CLI works

@@ -34,7 +34,7 @@ The primary shareable authoring format is strict YAML (`winforge.app/v0`). JSON 
 
 ### 3. Runtime abstraction layer
 
-Providers are pluggable through `runtime/catalog.json`; active v0 providers are `wine`, `staging`, and `proton-ge`. Providers must not know about VIC, Kubernetes, or customer tenancy.
+Providers are pluggable through `runtime/catalog.json`; active v0 providers are `wine`, `staging`, and `umu-proton-ge`. `wine` and `staging` launch directly with Wine; `umu-proton-ge` launches the GE-Proton runner through UMU (`umu-run`). Providers must not know about VIC, Kubernetes, or customer tenancy.
 
 ### 4. Builder pipeline
 

@@ -37,13 +37,13 @@ services:
     stdin_open: true
     tty: true
 
-  proton-ge:
+  umu-proton-ge:
     build:
       context: ..
-      dockerfile: container/providers/proton-ge/Dockerfile
+      dockerfile: container/providers/umu-proton-ge/Dockerfile
       args:
         GE_PROTON_TAG: "GE-Proton9-27"
-    image: winforge/proton-ge:GE-Proton9-27-dev
+    image: winforge/umu-proton-ge:GE-Proton9-27-dev
     environment:
       WINEFS: builder
     volumes:

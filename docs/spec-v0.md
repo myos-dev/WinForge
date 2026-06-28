@@ -40,7 +40,7 @@ Strict YAML rules:
 
 ## Application recipe fields
 
-`runtime.provider` must be one of `wine`, `staging`, or `proton-ge`. `runtime.version` is required. Provider/version are selected at build time and enforced at run time; changing providers should require rebuilding.
+`runtime.provider` must be one of `wine`, `staging`, or `umu-proton-ge`. `runtime.version` is required. Provider/version are selected at build time and enforced at run time; changing providers should require rebuilding. For `umu-proton-ge`, the provider identifies the UMU-backed Proton-family stack while `runtime.version` selects the GE-Proton runner tag.
 
 `dependencies` supports build-time dependency installation. Allowed kinds: `winetricks`, `font`, `directx`, `package`, `runtime-component`.
 

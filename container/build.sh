@@ -8,7 +8,7 @@
 #   ./container/build.sh                         # build all CI-enabled catalog entries
 #   ./container/build.sh wine default            # build catalog default for wine
 #   ./container/build.sh staging 9.0
-#   ./container/build.sh proton-ge GE-Proton9-27
+#   ./container/build.sh umu-proton-ge GE-Proton9-27
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
