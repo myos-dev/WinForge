@@ -27,12 +27,14 @@ filesystem:
   - source: overlays/notepad-plus-plus/config.xml
     target: C:/Program Files/Notepad++/config.xml
 
-config:
-  wine:
-    arch: win64
-    dllOverrides:
-      mscoree: disabled
-      mshtml: disabled
+compatibility:
+  arch: win64
+  windowsVersion: win10
+  graphics:
+    backend: wined3d
+  dllPolicy:
+    mscoree: disabled
+    mshtml: disabled
 
 registry:
   - path: HKCU/Software/WinForge/NotepadPlusPlus

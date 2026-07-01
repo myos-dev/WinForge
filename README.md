@@ -174,6 +174,30 @@ Current curated runner set:
 | `staging` | `latest`/`staging-latest` -> `11.10`; `previous` -> `11.9`; `baseline` -> `11.0` | `11.10`, `11.9`, `11.0` |
 | `umu-proton-ge` | `latest` -> `GE-Proton11-1`; `previous` -> `GE-Proton10-34`; `legacy` -> `GE-Proton9-27` | `GE-Proton11-1`, `GE-Proton10-34`, `GE-Proton9-27` |
 
+## Compatibility Policy
+
+Harder Windows applications often need deliberate compatibility policy, not just a generic Wine image. WinForge supports a first-class `compatibility` block:
+
+```yaml
+compatibility:
+  arch: win64
+  windowsVersion: win10
+  graphics:
+    backend: dxvk        # wined3d, dxvk, vkd3d, vkd3d-proton, auto, none
+    fallback: wined3d
+  dllPolicy:
+    d3d11: native,builtin
+    d3dcompiler_47: native
+    mscoree: disabled
+    mshtml: disabled
+  env:
+    WINEDEBUG: "-all"
+```
+
+WinForge normalizes this to `winforge.compatibility-policy/v0`, records it in bundle graph/provenance/OCI metadata, applies `WINEARCH`, `winecfg -v <windowsVersion>`, compatibility env, and deterministic `WINEDLLOVERRIDES`, and installs requested `dxvk`/`vkd3d` prefix backends through winetricks. Legacy `config.wine.dllOverrides` is still normalized, but new recipes should prefer `compatibility`.
+
+This is intentionally a high-level policy layer. Explicit loader ordering, COM timing controls, and trace/debug knobs are not primary schema.
+
 ## Local Artifact Index
 
 `winforge build` registers materialized bundles in a local artifact index at:

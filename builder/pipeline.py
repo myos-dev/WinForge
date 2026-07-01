@@ -5,6 +5,7 @@ WinForge Wine/Proton OCI container.
 """
 from __future__ import annotations
 import json, shlex
+from core.compatibility import compatibility_environment
 from core.manifest import Manifest
 
 PHASE_ORDER = [
@@ -68,6 +69,65 @@ def build_plan(manifest: Manifest) -> list[dict[str, object]]:
     ]
 
 
+def _compatibility_policy_lines(manifest: Manifest) -> list[str]:
+    """Return shell lines that export high-level compatibility policy."""
+    policy = manifest.compatibility or {}
+    if not policy:
+        return []
+
+    lines = [
+        "### Compatibility policy #######################################",
+        'echo "[winforge] Compatibility policy"',
+    ]
+    for key, value in compatibility_environment(policy).items():
+        lines.append(f"export {key}={_shell_quote(str(value))}")
+        if key == "WINEDLLOVERRIDES":
+            lines.append('echo "  WINEDLLOVERRIDES=<compiled compatibility policy>"')
+        elif key.startswith("WINFORGE_GRAPHICS_"):
+            lines.append(f'echo "  {key}={value}"')
+        elif key in {"WINEDEBUG", "DXVK_LOG_LEVEL"}:
+            lines.append(f'echo "  env {key}=<set>"')
+        else:
+            lines.append(f'echo "  {key}={value}"')
+
+    lines.extend(['echo ""', ""])
+    return lines
+
+
+def _compatibility_post_wineboot_lines(manifest: Manifest) -> list[str]:
+    """Return shell lines that require an initialized Wine prefix."""
+    policy = manifest.compatibility or {}
+    if not policy:
+        return []
+    lines: list[str] = []
+    windows_version = policy.get("windowsVersion")
+    if windows_version:
+        lines.extend([
+            f'echo "[winforge]   Setting Windows version: {windows_version}"',
+            f"winecfg -v {shlex.quote(str(windows_version))} 2>&1 | while IFS= read -r line; do echo \"  $line\"; done",
+        ])
+
+    backend = (policy.get("graphics") or {}).get("backend")
+    if backend == "dxvk":
+        lines.extend(_winetricks_backend_lines("dxvk", "DXVK"))
+    elif backend in {"vkd3d", "vkd3d-proton"}:
+        lines.extend(_winetricks_backend_lines("vkd3d", "vkd3d"))
+    elif backend in {"wined3d", "none", "auto"}:
+        lines.append(f'echo "[winforge]   Graphics backend {backend}: no prefix install step"')
+    return lines
+
+
+def _winetricks_backend_lines(verb: str, label: str) -> list[str]:
+    return [
+        f'echo "[winforge]   Installing graphics backend via winetricks: {label}"',
+        f'winetricks -q {verb} 2>&1 | while IFS= read -r line; do echo "  $line"; done',
+    ]
+
+
+def _shell_quote(value: str) -> str:
+    return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
 def _plan_dep(d):
     if d.kind == "winetricks":
         return "install winetricks verbs: " + ", ".join(d.verbs)
@@ -111,11 +171,13 @@ def generate_build_script(
         f'echo "[winforge] Workspace mount: {workspace_mount}"',
         "echo ''",
         "",
+        *_compatibility_policy_lines(manifest),
         # ------------------------------------------------------------------
         "### Phase 1: init-prefix ##########################################",
         'echo "[winforge] Phase 1/6: Initializing Wine prefix"',
         f"wine wineboot --init 2>&1 | while IFS= read -r line; do echo \"{indent}$line\"; done",
         'echo "[winforge]   Prefix initialized successfully"',
+        *_compatibility_post_wineboot_lines(manifest),
         "echo ''",
         "",
         # ------------------------------------------------------------------

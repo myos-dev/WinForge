@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from artifact.inspection import verify_bundle
+from core.compatibility import compatibility_environment
 
 RUN_PLAN_SCHEMA_VERSION = "winforge.run-plan/v0"
 RUN_RESULT_SCHEMA_VERSION = "winforge.run-result/v0"
@@ -48,6 +49,8 @@ def build_run_plan(
     runtime = dict(graph.get("runnerRuntime") or {})
     launch = dict(graph.get("launch") or {})
     graphics_contract = dict(graph.get("graphics") or {})
+    compatibility_policy = dict((graph.get("compatibility") or {}).get("requestedPolicy") or {})
+    compatibility_env = compatibility_environment(compatibility_policy)
 
     mode = graphics or str(graphics_contract.get("defaultMode") or "headless")
     supported_modes = list(graphics_contract.get("supportedModes") or [])
@@ -64,7 +67,8 @@ def build_run_plan(
     selected_engine = engine or _find_engine()
     launch_command = _launch_command(runtime, launch)
     environment = _container_environment(mode)
-    script = _launch_script(mode, launch, launch_command)
+    environment.update(compatibility_env)
+    script = _launch_script(mode, launch, launch_command, compatibility_env)
     argv = _container_argv(
         selected_engine,
         bundle,
@@ -209,7 +213,12 @@ def _container_environment(graphics: str) -> dict[str, str]:
     }
 
 
-def _launch_script(mode: str, launch: dict[str, Any], command: list[str]) -> str:
+def _launch_script(
+    mode: str,
+    launch: dict[str, Any],
+    command: list[str],
+    compatibility_env: dict[str, str] | None = None,
+) -> str:
     lines = [
         "set -euo pipefail",
         f"export WINFORGE_BUNDLE={shlex.quote(BUNDLE_MOUNT)}",
@@ -225,6 +234,11 @@ def _launch_script(mode: str, launch: dict[str, Any], command: list[str]) -> str
     working_dir = launch.get("workingDirectory")
     if working_dir:
         lines.append(f"export WINFORGE_WORKING_DIRECTORY={shlex.quote(str(working_dir))}")
+
+    for key, value in sorted((compatibility_env or {}).items()):
+        if not _ENV_NAME.fullmatch(key):
+            raise RunError(f"compatibility env key {key!r} is not a valid POSIX environment name")
+        lines.append(f"export {key}={shlex.quote(str(value))}")
 
     for key, value in sorted((launch.get("env") or {}).items()):
         if not _ENV_NAME.fullmatch(key):

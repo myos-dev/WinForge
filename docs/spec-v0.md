@@ -48,7 +48,7 @@ Strict YAML rules:
 
 `filesystem` maps declared source files into Windows-style targets under `drive_c`.
 
-`config` records application/runtime configuration such as Wine architecture, DLL overrides, and other provider-level config.
+`config` remains supported for legacy/provider-level configuration. New harder-app recipes should prefer first-class `compatibility` policy for architecture, Windows version, graphics backend, DLL policy, and compatibility environment.
 
 `registry` records build-time registry tweaks.
 
@@ -57,6 +57,32 @@ Strict YAML rules:
 `state` describes runtime state behavior. The default direction is persistent runtime state separate from the immutable artifact.
 
 `exports` describes user/application outputs such as reports, save exports, screenshots, generated documents, or other files that should be mounted or collected explicitly.
+
+## Compatibility policy
+
+`compatibility` is a high-level policy layer above Wine internals. It supports:
+
+```yaml
+compatibility:
+  arch: win64
+  windowsVersion: win10
+  graphics:
+    backend: dxvk
+    fallback: wined3d
+  dllPolicy:
+    d3d11: native,builtin
+    d3dcompiler_47: native
+    mscoree: disabled
+    mshtml: disabled
+  env:
+    WINEDEBUG: "-all"
+```
+
+`arch` currently accepts `win32` or `win64`. `windowsVersion` accepts common Wine version targets such as `win7`, `win10`, and `win11`. `graphics.backend` accepts `auto`, `wined3d`, `dxvk`, `vkd3d`, `vkd3d-proton`, or `none`. `dllPolicy` values normalize to Wine override modes: `disabled`, `native`, `builtin`, `native,builtin`, or `builtin,native`.
+
+During build, WinForge exports the policy environment, applies `winecfg -v <windowsVersion>`, compiles `dllPolicy` into deterministic `WINEDLLOVERRIDES`, and installs `dxvk`/`vkd3d` prefix backends through winetricks when requested. During `run` and OCI app-image launch, WinForge re-exports the same compatibility environment from the embedded graph.
+
+Legacy `config.wine.arch`, `config.wine.windowsVersion`, `config.wine.dllOverrides`, `config.graphics`, and `config.env` normalize into the same policy, but explicit `compatibility` fields override legacy config.
 
 ## Artifact model
 
@@ -86,7 +112,7 @@ Runtime state is separate from artifact contents and should be persisted, discar
 
 ## Execution graph
 
-`metadata/graph.json` is build/provenance/contract metadata. It records application identity, requested and resolved builder runtime, requested and resolved runner runtime, supported graphics modes, launch contract, exact-runtime compatibility policy, and deterministic build phase nodes/edges.
+`metadata/graph.json` is build/provenance/contract metadata. It records application identity, requested and resolved builder runtime, requested and resolved runner runtime, supported graphics modes, launch contract, exact-runtime compatibility policy, requested compatibility policy, and deterministic build phase nodes/edges.
 
 The graph should not become a general runtime scheduler. Runtime should be boring: verify artifact, prepare state, start display if requested, and launch the application contract.
 

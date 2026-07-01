@@ -64,6 +64,7 @@ def create_bundle(manifest: Manifest, output_dir: Path, *,
                 "version": manifest.version,
             },
             "runtime": runtime.to_dict(),
+            "compatibility": manifest.compatibility,
             "declaredProvenance": manifest.provenance,
             "notes": notes,
         })

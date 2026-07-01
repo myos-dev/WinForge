@@ -586,6 +586,47 @@ with open(graph_path, "r", encoding="utf-8") as handle:
     graph = json.load(handle)
 runtime = graph.get("runnerRuntime", {{}})
 launch = graph.get("launch", {{}})
+compatibility = (graph.get("compatibility") or {{}}).get("requestedPolicy") or {{}}
+
+
+def _compile_dll_policy(policy):
+    aliases = {{
+        "disabled": "disabled", "disable": "disabled", "off": "disabled", "none": "disabled",
+        "native": "native", "n": "native",
+        "builtin": "builtin", "b": "builtin",
+        "native,builtin": "native,builtin", "n,b": "native,builtin", "native-first": "native,builtin",
+        "builtin,native": "builtin,native", "b,n": "builtin,native", "builtin-first": "builtin,native",
+    }}
+    values = {{"disabled": "", "native": "n", "builtin": "b", "native,builtin": "n,b", "builtin,native": "b,n"}}
+    parts = []
+    for dll in sorted(policy or {{}}):
+        raw = str(policy[dll]).strip().lower().replace(" ", "")
+        normalized = aliases.get(raw)
+        if normalized:
+            parts.append(f"{{dll}}={{values[normalized]}}")
+    return ";".join(parts)
+
+
+def _compatibility_env(policy):
+    env = {{}}
+    if policy.get("arch"):
+        env["WINEARCH"] = str(policy["arch"])
+    graphics = policy.get("graphics") or {{}}
+    if graphics.get("backend"):
+        env["WINFORGE_GRAPHICS_BACKEND"] = str(graphics["backend"])
+    if graphics.get("fallback"):
+        env["WINFORGE_GRAPHICS_FALLBACK"] = str(graphics["fallback"])
+    for key, value in (policy.get("env") or {{}}).items():
+        env[str(key)] = str(value)
+    overrides = _compile_dll_policy(policy.get("dllPolicy") or {{}})
+    if overrides:
+        env["WINEDLLOVERRIDES"] = overrides
+    return env
+
+
+for key, value in _compatibility_env(compatibility).items():
+    os.environ[str(key)] = str(value)
+
 launcher = runtime.get("launcher", "wine")
 if launcher == "umu":
     executable = "umu-run"

@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from core.compatibility import CompatibilityPolicyError, normalize_compatibility_policy
+
 SCHEMA_VERSION = "winforge.app/v0"
 LEGACY_SCHEMA_VERSION = "winforge.dev/v0"
 SUPPORTED_SCHEMA_VERSIONS = {SCHEMA_VERSION, LEGACY_SCHEMA_VERSION}
@@ -25,6 +27,7 @@ ROOT_FIELDS = {
     "install",
     "filesystem",
     "config",
+    "compatibility",
     "registry",
     "launch",
     "state",
@@ -207,6 +210,7 @@ class Manifest:
     provenance: dict[str, Any] = field(default_factory=dict)
     sources: list[dict[str, Any]] = field(default_factory=list)
     config: dict[str, Any] = field(default_factory=dict)
+    compatibility: dict[str, Any] = field(default_factory=dict)
     registry: list[dict[str, Any]] = field(default_factory=list)
     state: dict[str, Any] = field(default_factory=dict)
     exports: list[dict[str, Any]] = field(default_factory=list)
@@ -228,6 +232,14 @@ class Manifest:
 
         provenance = _object(data.get("provenance", {}) or {}, "provenance")
         config = _object(data.get("config", {}) or {}, "config")
+        raw_compatibility = _object(data.get("compatibility", {}) or {}, "compatibility")
+        try:
+            compatibility = normalize_compatibility_policy(
+                config=config,
+                compatibility=raw_compatibility,
+            )
+        except CompatibilityPolicyError as exc:
+            raise ManifestError(str(exc)) from exc
         state = _object(data.get("state", {}) or {}, "state")
         sources = _list(data.get("sources", []), "sources")
         registry = _list(data.get("registry", []), "registry")
@@ -245,6 +257,7 @@ class Manifest:
             provenance,
             sources,
             config,
+            compatibility,
             registry,
             state,
             exports,
@@ -261,6 +274,7 @@ class Manifest:
             "install": [x.to_dict() for x in self.install],
             "filesystem": [x.to_dict() for x in self.filesystem],
             "config": self.config,
+            "compatibility": self.compatibility,
             "registry": self.registry,
             "launch": self.launch.to_dict(),
             "state": self.state,

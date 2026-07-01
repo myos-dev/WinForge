@@ -114,6 +114,7 @@ def build_execution_graph(manifest: Manifest) -> dict[str, Any]:
         "compatibility": {
             "requiresExactRuntime": True,
             "policy": "exact-provider-version",
+            "requestedPolicy": manifest.compatibility,
             "reason": (
                 "Wine prefixes are stateful runtime artifacts; v0 bundles "
                 "must run with the same provider/version used to build them."
