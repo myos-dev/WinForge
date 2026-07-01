@@ -87,7 +87,7 @@ def _runner_environment_lines(manifest: Manifest) -> list[str]:
 
 
 def _compatibility_policy_lines(manifest: Manifest) -> list[str]:
-    """Return shell lines that export high-level compatibility policy."""
+    """Return shell lines that export compatibility env safe before wineboot."""
     policy = manifest.compatibility or {}
     if not policy:
         return []
@@ -97,10 +97,13 @@ def _compatibility_policy_lines(manifest: Manifest) -> list[str]:
         'echo "[winforge] Compatibility policy"',
     ]
     for key, value in compatibility_environment(policy).items():
-        lines.append(f"export {key}={_shell_quote(str(value))}")
         if key == "WINEDLLOVERRIDES":
-            lines.append('echo "  WINEDLLOVERRIDES=<compiled compatibility policy>"')
-        elif key.startswith("WINFORGE_GRAPHICS_"):
+            # DLL overrides are application/runtime policy, not prefix-creation
+            # policy. Applying them before wineboot can perturb Wine's own
+            # setupapi/appwiz/mono initialization path.
+            continue
+        lines.append(f"export {key}={_shell_quote(str(value))}")
+        if key.startswith("WINFORGE_GRAPHICS_"):
             lines.append(f'echo "  {key}={value}"')
         elif key in {"WINEDEBUG", "DXVK_LOG_LEVEL"}:
             lines.append(f'echo "  env {key}=<set>"')
@@ -109,6 +112,21 @@ def _compatibility_policy_lines(manifest: Manifest) -> list[str]:
 
     lines.extend(['echo ""', ""])
     return lines
+
+
+def _compatibility_dll_override_lines(manifest: Manifest) -> list[str]:
+    """Return shell lines that export DLL overrides after prefix initialization."""
+    policy = manifest.compatibility or {}
+    if not policy:
+        return []
+    overrides = compatibility_environment(policy).get("WINEDLLOVERRIDES")
+    if not overrides:
+        return []
+    return [
+        'echo "[winforge]   Applying DLL override policy after prefix initialization"',
+        f"export WINEDLLOVERRIDES={_shell_quote(str(overrides))}",
+        'echo "  WINEDLLOVERRIDES=<compiled compatibility policy>"',
+    ]
 
 
 def _compatibility_post_wineboot_lines(manifest: Manifest) -> list[str]:
@@ -193,8 +211,10 @@ def generate_build_script(
         # ------------------------------------------------------------------
         "### Phase 1: init-prefix ##########################################",
         'echo "[winforge] Phase 1/6: Initializing Wine prefix"',
-        f"wine wineboot --init 2>&1 | while IFS= read -r line; do echo \"{indent}$line\"; done",
+        f'echo "[winforge]   wineboot timeout: {timeout_per_phase}s"',
+        f"timeout {timeout_per_phase}s wine wineboot --init 2>&1 | while IFS= read -r line; do echo \"{indent}$line\"; done",
         'echo "[winforge]   Prefix initialized successfully"',
+        *_compatibility_dll_override_lines(manifest),
         *_compatibility_post_wineboot_lines(manifest),
         "echo ''",
         "",

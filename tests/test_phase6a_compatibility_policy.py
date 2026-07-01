@@ -200,6 +200,28 @@ class CompatibilityPolicyApplicationTests(unittest.TestCase):
         self.assertLess(script.index("winecfg -v win10"), script.index("### Phase 2: install-dependencies"))
         self.assertLess(script.index("winetricks -q dxvk"), script.index("### Phase 2: install-dependencies"))
 
+    def test_build_script_defers_dll_overrides_until_after_wineboot(self):
+        data = json.loads(json.dumps(BASE_MANIFEST))
+        data["compatibility"] = FIRST_CLASS_COMPATIBILITY
+        manifest = Manifest.from_dict(data)
+
+        script = generate_build_script(manifest)
+
+        winearch = script.index("export WINEARCH='win64'")
+        wineboot = script.index("wine wineboot --init")
+        dll_overrides = script.index("export WINEDLLOVERRIDES='d3d11=n,b;d3dcompiler_47=n;mscoree=;mshtml='")
+        self.assertLess(winearch, wineboot)
+        self.assertLess(wineboot, dll_overrides)
+
+    def test_build_script_bounds_wineboot_with_phase_timeout(self):
+        data = json.loads(json.dumps(BASE_MANIFEST))
+        data["compatibility"] = FIRST_CLASS_COMPATIBILITY
+        manifest = Manifest.from_dict(data)
+
+        script = generate_build_script(manifest, timeout_per_phase=123)
+
+        self.assertIn("timeout 123s wine wineboot --init", script)
+
     def test_run_plan_exports_compatibility_policy_for_application_launch(self):
         data = json.loads(json.dumps(BASE_MANIFEST))
         data["compatibility"] = FIRST_CLASS_COMPATIBILITY
