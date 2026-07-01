@@ -100,6 +100,10 @@ Dockerfile structure:
 
 The entrypoint in every image is `xvfb-entrypoint.sh`:
 
+`xvfb-entrypoint.sh` is a Bash script, not a POSIX `/bin/sh` script, because
+it uses strict-mode `pipefail`. Keep the shebang aligned with that contract so
+Debian/Ubuntu images do not invoke it under `dash` and fail before Wine starts.
+
 1. Start Xvfb on `:99` (configurable via `DISPLAY`)
 2. Wait for X server readiness (up to 3 seconds)
 3. Set `WINEPREFIX`, `WINEDLLOVERRIDES`, `WINEARCH`

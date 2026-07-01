@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # WinForge Xvfb Entrypoint
 #
 # Starts a virtual X server for headless Wine/Proton execution,
