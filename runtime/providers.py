@@ -8,6 +8,7 @@ from runtime.catalog import (
     list_catalog_providers,
     resolve_catalog_version,
 )
+from runtime.runner_catalog import RunnerCatalogError, resolve_runner_spec
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,10 @@ class RuntimeBinding:
     family: str | None = None
     runner: str | None = None
     runner_version: str | None = None
+    runner_source: str | None = None
+    runner_url: str | None = None
+    runner_sha256: str | None = None
+    runner_arch: str | None = None
     package_version: str | None = None
     launcher_version: str | None = None
     source: str | None = None
@@ -39,6 +44,10 @@ class RuntimeBinding:
             "family": self.family,
             "runner": self.runner,
             "runnerVersion": self.runner_version,
+            "runnerSource": self.runner_source,
+            "runnerUrl": self.runner_url,
+            "runnerSha256": self.runner_sha256,
+            "runnerArch": self.runner_arch,
             "packageVersion": self.package_version,
             "launcher": self.launcher,
             "launcherVersion": self.launcher_version,
@@ -95,14 +104,41 @@ def resolve_runtime(spec: RuntimeSpec) -> RuntimeBinding:
             "Add it to runtime/catalog.json before building."
         )
 
+    runner = entry.runner
+    runner_version = entry.runner_version
+    runner_source = None
+    runner_url = None
+    runner_sha256 = None
+    runner_arch = None
+    if spec.runner:
+        try:
+            runner_spec = resolve_runner_spec(spec.runner)
+        except RunnerCatalogError as exc:
+            raise ManifestError(str(exc)) from exc
+        if runner_spec.provider != spec.provider:
+            raise ManifestError(
+                f"runtime.runner {spec.runner!r} is for provider {runner_spec.provider}, "
+                f"not {spec.provider}"
+            )
+        runner = runner_spec.id
+        runner_version = runner_spec.version
+        runner_source = runner_spec.source
+        runner_url = runner_spec.url
+        runner_sha256 = runner_spec.sha256
+        runner_arch = runner_spec.arch
+
     return RuntimeBinding(
         provider=spec.provider,
         version=entry.version,
         requested_version=entry.requested_version,
         resolved_version=entry.resolved_version,
         family=entry.family,
-        runner=entry.runner,
-        runner_version=entry.runner_version,
+        runner=runner,
+        runner_version=runner_version,
+        runner_source=runner_source,
+        runner_url=runner_url,
+        runner_sha256=runner_sha256,
+        runner_arch=runner_arch,
         package_version=entry.package_version,
         launcher=entry.launcher,
         launcher_version=entry.launcher_version,

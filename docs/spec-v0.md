@@ -40,7 +40,9 @@ Strict YAML rules:
 
 ## Application recipe fields
 
-`runtime.provider` must be one of `wine`, `staging`, or `umu-proton-ge`. `runtime.version` is required and may be either a pinned runner version or a catalog alias such as `latest`, `stable`, `previous`, `legacy`, or `baseline`. Provider/version are selected at build time and enforced at run time; changing providers should require rebuilding. For `umu-proton-ge`, the provider identifies the UMU-backed Proton-family stack while `runtime.version` selects or resolves to the GE-Proton runner tag. Resolved runtime metadata records both `requestedVersion` and `resolvedVersion`; future production artifacts should use the resolved image digest, not a mutable alias, as identity.
+`runtime.provider` must be one of `wine`, `staging`, or `umu-proton-ge`. `runtime.version` is required and may be either a pinned runtime image version or a catalog alias such as `latest`, `stable`, `previous`, `legacy`, or `baseline`. Provider/version are selected at build time and enforced at run time; changing providers should require rebuilding. For `umu-proton-ge`, the provider identifies the UMU-backed Proton-family stack while `runtime.version` selects or resolves to the GE-Proton runner tag. Resolved runtime metadata records both `requestedVersion` and `resolvedVersion`; future production artifacts should use the resolved image digest, not a mutable alias, as identity.
+
+`runtime.runner` is optional and selects a downloadable runner archive alias within the provider. Phase 6F adds `pol-8.2`, `pol-4.3`, and `pol-3.0.3` as Wine runner aliases backed by PlayOnLinux/Phoenicis-hosted upstream Wine x86 tarballs. These are not a separate PlayOnLinux provider; they are cacheable Wine runner archives with pinned URL/SHA-256 provenance. Resolved runtime metadata records `runner`, `runnerVersion`, `runnerSource`, `runnerUrl`, `runnerSha256`, and `runnerArch` when a recipe requests a downloadable runner.
 
 `sources` records upstream/local source provenance plus BYO/legal source policy. Supported source `type` values include `installer`, `iso`, `archive`, `files`, `prefix`, `font`, and `other`. Supported source `policy` values include `bring-your-own-files`, `bring-your-own-installer`, `bring-your-own-licensed-media`, `bring-your-own-prefix`, `redistributable`, and fixture/external marker policies. v0 source integrity verifies local `file://` and relative workspace paths plus declared `sha256` values for file sources; remote URLs are recorded but not fetched by the dependency-light verifier.
 
@@ -58,7 +60,7 @@ Strict YAML rules:
 
 `launch.entrypoint` is required and remains the default app entrypoint. `launch.args`, `launch.env`, and `launch.workingDirectory` are optional.
 
-`entrypoints` optionally records named suite entrypoints such as `word`, `excel`, and `powerpoint`. `fileAssociations` maps extensions/MIME types to those named entrypoints. v0 records this metadata for artifacts/evidence; future run UX can route `winforge run <app> --entrypoint word <file.docx>` through it.
+`entrypoints` optionally records named suite entrypoints such as `word`, `excel`, and `powerpoint`. `fileAssociations` maps extensions/MIME types to those named entrypoints. v0 records this metadata for artifacts/evidence, and `winforge run <app> --entrypoint writer <file.docx>` routes host files as read-only `Z:` path arguments.
 
 `state` describes runtime state behavior. The default direction is persistent runtime state separate from the immutable artifact.
 
@@ -130,6 +132,19 @@ compatibility:
 During build, WinForge exports the policy environment, applies `winecfg -v <windowsVersion>`, compiles `dllPolicy` into deterministic `WINEDLLOVERRIDES`, and installs `dxvk`/`vkd3d` prefix backends through winetricks when requested. During `run` and OCI app-image launch, WinForge re-exports the same compatibility environment from the embedded graph.
 
 Legacy `config.wine.arch`, `config.wine.windowsVersion`, `config.wine.dllOverrides`, `config.graphics`, and `config.env` normalize into the same policy, but explicit `compatibility` fields override legacy config.
+
+
+## Downloadable runner cache
+
+`winforge runners list` emits `winforge.runner-catalog/v0` and lists downloadable runner archive aliases. The initial aliases are:
+
+| Alias | Source | Version | Arch | SHA-256 |
+| --- | --- | --- | --- | --- |
+| `pol-8.2` | PlayOnLinux/Phoenicis upstream Wine | `8.2` | `x86` | `d38ed5362564c0de73a6f4720a20cf6eece569d2455be2567ac41e1a8a5cb0d6` |
+| `pol-4.3` | PlayOnLinux/Phoenicis upstream Wine | `4.3` | `x86` | `64f34fb79de3225bb541fcb8d8c57d0ecf9db2d404e57834096738680c95b29c` |
+| `pol-3.0.3` | PlayOnLinux/Phoenicis upstream Wine | `3.0.3` | `x86` | `0b5d59ad852b87ffccf7a72066fd80cb0759647ebd952c2851ce2b5d76ba33c4` |
+
+`winforge runners ensure <alias>` downloads, verifies, and extracts the runner under the local cache, emitting `winforge.runner-cache/v0`. `winforge runners diagnose <alias-or-path>` emits `winforge.runner-diagnostic/v0`; it detects common host/runtime blockers such as missing 32-bit ELF interpreters (`/lib/ld-linux.so.2`) before users get an opaque shell error like “cannot execute: required file not found”.
 
 ## Source integrity and compatibility evidence
 

@@ -134,6 +134,11 @@ winforge export kube notepad-plus-plus \
 
 # List available runtime providers
 winforge providers
+
+# List/download/diagnose downloadable Wine runner archives
+winforge runners list
+winforge runners ensure pol-8.2
+winforge runners diagnose pol-8.2
 ```
 
 ## Application Recipes
@@ -166,13 +171,32 @@ currently resolves to Wine `11.0`, and bundle metadata records both
 `requestedVersion: latest` and `resolvedVersion: 11.0`. Use pinned versions or
 resolved OCI digests for customer/production reproducibility.
 
-Current curated runner set:
+Current curated runtime image set:
 
 | Provider | Aliases | Pinned versions |
 | --- | --- | --- |
 | `wine` | `latest`/`stable` -> `11.0`; `previous` -> `10.0`; `legacy` -> `9.0` | `11.0`, `10.0`, `9.0` |
 | `staging` | `latest`/`staging-latest` -> `11.10`; `previous` -> `11.9`; `baseline` -> `11.0` | `11.10`, `11.9`, `11.0` |
 | `umu-proton-ge` | `latest` -> `GE-Proton11-1`; `previous` -> `GE-Proton10-34`; `legacy` -> `GE-Proton9-27` | `GE-Proton11-1`, `GE-Proton10-34`, `GE-Proton9-27` |
+
+Downloadable Wine runner archives are separate from the runtime image catalog. Recipes may request a runner archive with `runtime.runner`:
+
+```yaml
+runtime:
+  provider: wine
+  version: "9.0"
+  runner: pol-8.2
+```
+
+The initial `pol-*` aliases are Bottles-compatible labels for PlayOnLinux/Phoenicis-hosted upstream Wine x86 tarballs, not a separate PlayOnLinux provider:
+
+| Runner alias | Upstream Wine | Initial use |
+| --- | --- | --- |
+| `pol-8.2` | Wine 8.2 x86 | legacy 32-bit apps such as Office 2007/2010 evidence |
+| `pol-4.3` | Wine 4.3 x86 | legacy 32-bit apps such as Office 2013/2016 evidence |
+| `pol-3.0.3` | Wine 3.0.3 x86 | fallback evidence path for Office 2007/2010 |
+
+Use `winforge runners ensure <alias>` to populate the local cache and `winforge runners diagnose <alias-or-path>` to detect missing host/runtime libraries such as the 32-bit ELF loader before attempting a real build/run.
 
 ## Compatibility Policy
 

@@ -38,7 +38,7 @@ ROOT_FIELDS = {
     "exports",
     "provenance",
 }
-RUNTIME_FIELDS = {"provider", "version", "source", "channel", "digest"}
+RUNTIME_FIELDS = {"provider", "version", "source", "channel", "digest", "runner"}
 DEPENDENCY_FIELDS = {"kind", "verbs", "name", "version", "sha256"}
 INSTALL_FIELDS = {"kind", "source", "sha256", "target", "command", "args"}
 FILESYSTEM_FIELDS = {"source", "target", "sha256", "mode"}
@@ -62,6 +62,7 @@ class RuntimeSpec:
     source: str | None = None
     channel: str | None = None
     digest: str | None = None
+    runner: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]):
@@ -76,6 +77,7 @@ class RuntimeSpec:
             _optional_str(data, "source"),
             _optional_str(data, "channel"),
             _optional_str(data, "digest"),
+            _optional_str(data, "runner"),
         )
 
     def to_dict(self):
@@ -85,6 +87,7 @@ class RuntimeSpec:
             "source": self.source,
             "channel": self.channel,
             "digest": self.digest,
+            "runner": self.runner,
         })
 
 

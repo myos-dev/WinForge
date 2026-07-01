@@ -39,6 +39,8 @@ from core.manifest import ManifestError, RuntimeSpec, load_manifest
 from core.sources import verify_manifest_sources
 from runtime.providers import list_providers, resolve_runtime
 from runtime.launcher import RunError, build_run_plan, execute_run_plan
+from runtime.runner_cache import RunnerCacheError, diagnose_runner, ensure_runner
+from runtime.runner_catalog import RunnerCatalogError, RunnerSpec, resolve_runner_spec, runner_catalog_payload
 
 
 # ---- manifest commands ----
@@ -64,6 +66,10 @@ def cmd_plan(args):
         "resolvedRuntimeVersion": binding.resolved_version,
         "runner": binding.runner,
         "runnerVersion": binding.runner_version,
+        "runnerSource": binding.runner_source,
+        "runnerUrl": binding.runner_url,
+        "runnerSha256": binding.runner_sha256,
+        "runnerArch": binding.runner_arch,
         "packageVersion": binding.package_version,
         "launcher": binding.launcher,
         "launcherVersion": binding.launcher_version,
@@ -254,6 +260,53 @@ def cmd_container_ref(args):
     print(ref)
     return 0
 
+# ---- downloadable runner commands ----
+
+def cmd_runners_list(args):
+    print(json.dumps(runner_catalog_payload(), indent=2, sort_keys=True))
+    return 0
+
+
+def _runner_spec_from_args(args) -> RunnerSpec:
+    if args.url:
+        base = None
+        if not args.provider and not args.version:
+            try:
+                base = resolve_runner_spec(args.runner)
+            except RunnerCatalogError:
+                base = None
+        provider = args.provider or (base.provider if base else "wine")
+        version = args.version or (base.version if base else args.runner.removeprefix("pol-"))
+        arch = args.arch or (base.arch if base else "x86")
+        source = args.source or (base.source if base else "manual")
+        strip_components = args.strip_components if args.strip_components is not None else (base.strip_components if base else 1)
+        return RunnerSpec(
+            id=args.runner,
+            provider=provider,
+            version=version,
+            arch=arch,
+            source=source,
+            url=args.url,
+            sha256=args.sha256,
+            strip_components=strip_components,
+        )
+    return resolve_runner_spec(args.runner)
+
+
+def cmd_runners_ensure(args):
+    spec = _runner_spec_from_args(args)
+    result = ensure_runner(spec, cache_dir=Path(args.cache_dir) if args.cache_dir else None)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_runners_diagnose(args):
+    candidate = Path(args.runner_or_path).expanduser()
+    path = candidate if candidate.exists() else Path(args.cache_dir or "~/.cache/winforge/runners").expanduser() / args.runner_or_path
+    result = diagnose_runner(path)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
 # ---- bundle commands ----
 
 
@@ -358,6 +411,10 @@ def cmd_providers(args):
                 "resolvedVersion": binding.resolved_version,
                 "runner": binding.runner,
                 "runnerVersion": binding.runner_version,
+                "runnerSource": binding.runner_source,
+                "runnerUrl": binding.runner_url,
+                "runnerSha256": binding.runner_sha256,
+                "runnerArch": binding.runner_arch,
                 "packageVersion": binding.package_version,
                 "ociImage": binding.oci_image,
                 "launcher": binding.launcher,
@@ -468,6 +525,30 @@ def build_parser():
     cp.add_argument("provider", help="Provider name")
     cp.add_argument("version", help="Version tag")
     cp.set_defaults(func=cmd_container_ref)
+
+    # downloadable runners
+    p = sub.add_parser("runners", help="Manage downloadable Wine runner archives")
+    rsub = p.add_subparsers(dest="runners_command", required=True)
+
+    rp = rsub.add_parser("list", help="List built-in downloadable runner aliases")
+    rp.set_defaults(func=cmd_runners_list)
+
+    rp = rsub.add_parser("ensure", help="Download/extract a runner into the local cache")
+    rp.add_argument("runner", help="Runner alias such as pol-8.2, or custom id when --url is supplied")
+    rp.add_argument("--cache-dir", help="Runner cache directory (default: ~/.cache/winforge/runners)")
+    rp.add_argument("--url", help="Override/download URL for a custom runner archive")
+    rp.add_argument("--sha256", help="Expected archive SHA-256 when --url is supplied")
+    rp.add_argument("--provider", help="Provider for a custom --url runner (default: wine)")
+    rp.add_argument("--version", help="Runner version for a custom --url runner")
+    rp.add_argument("--arch", default=None, help="Runner architecture for a custom --url runner")
+    rp.add_argument("--source", help="Runner source name for a custom --url runner")
+    rp.add_argument("--strip-components", type=int, default=None, help="Tar path components to strip while extracting")
+    rp.set_defaults(func=cmd_runners_ensure)
+
+    rp = rsub.add_parser("diagnose", help="Diagnose a cached runner alias or runner directory")
+    rp.add_argument("runner_or_path", help="Runner alias such as pol-8.2, or a runner directory/bin/wine path")
+    rp.add_argument("--cache-dir", help="Runner cache directory (default: ~/.cache/winforge/runners)")
+    rp.set_defaults(func=cmd_runners_diagnose)
 
     # bundle
     p = sub.add_parser("bundle", help="Inspect and verify WinForge execution bundles")
@@ -588,6 +669,9 @@ def main(argv=None):
     except KubeExportError as exc:
         print(f"winforge: kube export error: {exc}", file=sys.stderr)
         return 7
+    except (RunnerCatalogError, RunnerCacheError) as exc:
+        print(f"winforge: runner error: {exc}", file=sys.stderr)
+        return 10
     except ArtifactIndexError as exc:
         print(f"winforge: artifact index error: {exc}", file=sys.stderr)
         return 6
