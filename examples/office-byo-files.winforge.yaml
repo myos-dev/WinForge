@@ -1,0 +1,72 @@
+schemaVersion: winforge.app/v0
+name: microsoft-office-byo-files
+version: "2016-byo-files"
+runtime:
+  provider: wine
+  version: latest
+
+# Customer/user must provide this tree locally. WinForge verifies and layers it;
+# WinForge does not download, ship, or activate Microsoft Office.
+sources:
+  - id: office-files
+    type: files
+    path: sources/office-files/Program Files/Microsoft Office
+    policy: bring-your-own-files
+    description: Customer-provided pre-installed Office Program Files tree
+
+profiles:
+  - office-legacy-32bit
+
+filesystem:
+  - source: sources/office-files/Program Files/Microsoft Office
+    target: C:/Program Files/Microsoft Office
+    mode: merge
+
+entrypoints:
+  - id: word
+    name: Microsoft Word
+    executable: C:/Program Files/Microsoft Office/root/Office16/WINWORD.EXE
+    workingDirectory: C:/Program Files/Microsoft Office/root/Office16
+  - id: excel
+    name: Microsoft Excel
+    executable: C:/Program Files/Microsoft Office/root/Office16/EXCEL.EXE
+    workingDirectory: C:/Program Files/Microsoft Office/root/Office16
+  - id: powerpoint
+    name: Microsoft PowerPoint
+    executable: C:/Program Files/Microsoft Office/root/Office16/POWERPNT.EXE
+    workingDirectory: C:/Program Files/Microsoft Office/root/Office16
+
+fileAssociations:
+  - entrypoint: word
+    extensions:
+      - .doc
+      - .docx
+    mime:
+      - application/msword
+      - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  - entrypoint: excel
+    extensions:
+      - .xls
+      - .xlsx
+      - .csv
+    mime:
+      - application/vnd.ms-excel
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      - text/csv
+  - entrypoint: powerpoint
+    extensions:
+      - .ppt
+      - .pptx
+    mime:
+      - application/vnd.ms-powerpoint
+      - application/vnd.openxmlformats-officedocument.presentationml.presentation
+
+launch:
+  entrypoint: C:/Program Files/Microsoft Office/root/Office16/WINWORD.EXE
+  workingDirectory: C:/Program Files/Microsoft Office/root/Office16
+
+state:
+  persistence: persistent
+exports: []
+provenance:
+  sources: []

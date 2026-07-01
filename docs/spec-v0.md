@@ -42,23 +42,66 @@ Strict YAML rules:
 
 `runtime.provider` must be one of `wine`, `staging`, or `umu-proton-ge`. `runtime.version` is required and may be either a pinned runner version or a catalog alias such as `latest`, `stable`, `previous`, `legacy`, or `baseline`. Provider/version are selected at build time and enforced at run time; changing providers should require rebuilding. For `umu-proton-ge`, the provider identifies the UMU-backed Proton-family stack while `runtime.version` selects or resolves to the GE-Proton runner tag. Resolved runtime metadata records both `requestedVersion` and `resolvedVersion`; future production artifacts should use the resolved image digest, not a mutable alias, as identity.
 
-`sources` records upstream/local source provenance. v0 source integrity verifies local `file://` and relative workspace paths plus declared `sha256` values; remote URLs are recorded but not fetched by the dependency-light verifier.
+`sources` records upstream/local source provenance plus BYO/legal source policy. Supported source `type` values include `installer`, `iso`, `archive`, `files`, `prefix`, `font`, and `other`. Supported source `policy` values include `bring-your-own-files`, `bring-your-own-installer`, `bring-your-own-licensed-media`, `bring-your-own-prefix`, `redistributable`, and fixture/external marker policies. v0 source integrity verifies local `file://` and relative workspace paths plus declared `sha256` values for file sources; remote URLs are recorded but not fetched by the dependency-light verifier.
+
+`profiles` expands named, reviewable compatibility/dependency defaults into concrete recipe fields. The first implemented profile is `office-legacy-32bit`, which adds `win32`, `win7`, Office legacy DLL policy, and the Winetricks verbs from current Office/Bottles evidence. Explicit recipe fields override profile defaults.
 
 `dependencies` supports build-time dependency installation. Allowed kinds: `winetricks`, `font`, `directx`, `package`, `runtime-component`.
 
 `install` supports build-time application installation. Allowed kinds: `msi`, `exe`, `portable`, `choco`, `script`. MSI/EXE/portable require `source`; script requires `command`.
 
-`filesystem` maps declared source files into Windows-style targets under `drive_c`.
+`filesystem` maps declared source files or directories into Windows-style targets under `drive_c`. `filesystem.mode: copy` is the default. `filesystem.mode: merge` copies the contents of a source directory into an existing target directory, enabling BlueBuild-style user-provided file trees such as `Program Files` overlays without nesting the source directory itself.
 
 `config` remains supported for legacy/provider-level configuration. New harder-app recipes should prefer first-class `compatibility` policy for architecture, Windows version, graphics backend, DLL policy, and compatibility environment.
 
 `registry` records build-time registry tweaks.
 
-`launch.entrypoint` is required. `launch.args`, `launch.env`, and `launch.workingDirectory` are optional.
+`launch.entrypoint` is required and remains the default app entrypoint. `launch.args`, `launch.env`, and `launch.workingDirectory` are optional.
+
+`entrypoints` optionally records named suite entrypoints such as `word`, `excel`, and `powerpoint`. `fileAssociations` maps extensions/MIME types to those named entrypoints. v0 records this metadata for artifacts/evidence; future run UX can route `winforge run <app> --entrypoint word <file.docx>` through it.
 
 `state` describes runtime state behavior. The default direction is persistent runtime state separate from the immutable artifact.
 
 `exports` describes user/application outputs such as reports, save exports, screenshots, generated documents, or other files that should be mounted or collected explicitly.
+
+
+## BYO files, profiles, and suite metadata
+
+For apps that are not cleanly installed from a public URL, recipes can model customer-provided material explicitly:
+
+```yaml
+sources:
+  - id: office-files
+    type: files
+    path: sources/office-files/Program Files/Microsoft Office
+    policy: bring-your-own-files
+
+profiles:
+  - office-legacy-32bit
+
+filesystem:
+  - source: sources/office-files/Program Files/Microsoft Office
+    target: C:/Program Files/Microsoft Office
+    mode: merge
+```
+
+This is the preferred direction for pre-installed file directories. BYO prefix import may be useful for Bottles/Crossover experiments later, but reproducible source materialization from installers/media/files is the core WinForge question.
+
+Suite apps can declare multiple entrypoints and file associations:
+
+```yaml
+entrypoints:
+  - id: word
+    name: Microsoft Word
+    executable: C:/Program Files/Microsoft Office/root/Office16/WINWORD.EXE
+fileAssociations:
+  - entrypoint: word
+    extensions:
+      - .doc
+      - .docx
+    mime:
+      - application/msword
+```
 
 ## Compatibility policy
 

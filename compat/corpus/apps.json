@@ -97,6 +97,39 @@
       "sourcePolicy": "class-marker-only",
       "status": "blocked",
       "tier": 5
+    },
+    {
+      "compatibilityFocus": [
+        "office",
+        "win32",
+        "installer",
+        "suite-entrypoints",
+        "file-associations",
+        "dotnet40",
+        "riched20",
+        "gdiplus"
+      ],
+      "name": "Microsoft Office legacy BYO installer/ISO",
+      "notes": "Targets Office 2007/2010/2013/2016 from user-provided licensed media. Do not bundle Office sources.",
+      "slug": "microsoft-office-legacy-byo-installer",
+      "sourcePolicy": "bring-your-own-licensed-media",
+      "status": "candidate",
+      "tier": 4
+    },
+    {
+      "compatibilityFocus": [
+        "office",
+        "files-module",
+        "program-files-merge",
+        "suite-entrypoints",
+        "file-associations"
+      ],
+      "name": "Microsoft Office BYO pre-installed files tree",
+      "notes": "Customer provides pre-installed Office file directories such as Program Files trees; WinForge layers them reproducibly without shipping Office.",
+      "slug": "microsoft-office-byo-files",
+      "sourcePolicy": "bring-your-own-files",
+      "status": "candidate",
+      "tier": 4
     }
   ],
   "description": "Seed compatibility corpus for evidence-driven WinForge app testing.",

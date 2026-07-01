@@ -18,3 +18,8 @@ def load_default_corpus() -> dict[str, Any]:
     if not isinstance(apps, list) or not apps:
         raise ValueError("default corpus must contain a non-empty apps list")
     return payload
+
+
+def load_corpus() -> dict[str, Any]:
+    """Backward-compatible alias for loading the packaged corpus."""
+    return load_default_corpus()

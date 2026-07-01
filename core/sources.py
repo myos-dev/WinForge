@@ -31,6 +31,9 @@ def verify_manifest_sources(manifest: Manifest, *, workspace: Path | str | None 
         source: str | None,
         expected_sha256: str | None = None,
         require_local: bool = True,
+        source_id: str | None = None,
+        source_type: str | None = None,
+        source_policy: str | None = None,
     ) -> None:
         if not source:
             error = f"{location}: source is missing"
@@ -51,6 +54,12 @@ def verify_manifest_sources(manifest: Manifest, *, workspace: Path | str | None 
             "source": source,
             "valid": True,
         }
+        if source_id:
+            item["sourceId"] = source_id
+        if source_type:
+            item["sourceType"] = source_type
+        if source_policy:
+            item["sourcePolicy"] = source_policy
         sha_error = _validate_expected_sha(location, expected_sha256)
         if expected_sha256:
             item["expectedSha256"] = expected_sha256
@@ -119,18 +128,16 @@ def verify_manifest_sources(manifest: Manifest, *, workspace: Path | str | None 
         items.append(item)
 
     for index, source in enumerate(manifest.sources):
-        if not isinstance(source, dict):
-            error = f"sources[{index}]: source declaration must be an object"
-            items.append({"location": f"sources[{index}]", "usage": "declared-source", "status": "invalid", "valid": False, "error": error})
-            errors.append(error)
-            continue
-        ref = source.get("url") or source.get("source") or source.get("path")
+        ref = source.ref
         add_item(
             location=f"sources[{index}]",
             usage="declared-source",
             source=str(ref) if ref is not None else None,
-            expected_sha256=source.get("sha256"),
+            expected_sha256=source.sha256,
             require_local=False,
+            source_id=source.id,
+            source_type=source.type,
+            source_policy=source.policy,
         )
 
     for index, step in enumerate(manifest.install):

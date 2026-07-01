@@ -234,9 +234,14 @@ def generate_build_script(
         else:
             dest = f'{prefix}/drive_c/{target.lstrip("/")}'
 
-        lines.append(f'echo "  Copy {abs_source} -> {dest}"')
-        lines.append(f'mkdir -p "$(dirname "{dest}")"')
-        lines.append(f'cp -r "{abs_source}" "{dest}" 2>&1')
+        if fm.mode == "merge":
+            lines.append(f'echo "  Merge {abs_source} -> {dest}"')
+            lines.append(f'mkdir -p "{dest}"')
+            lines.append(f'cp -a "{abs_source}/." "{dest}/" 2>&1')
+        else:
+            lines.append(f'echo "  Copy {abs_source} -> {dest}"')
+            lines.append(f'mkdir -p "$(dirname "{dest}")"')
+            lines.append(f'cp -r "{abs_source}" "{dest}" 2>&1')
 
     if not manifest.filesystem:
         lines.append('echo "  No filesystem mappings declared"')

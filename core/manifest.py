@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from core.compatibility import CompatibilityPolicyError, normalize_compatibility_policy
+from core.profiles import ProfileError, apply_profiles
 
 SCHEMA_VERSION = "winforge.app/v0"
 LEGACY_SCHEMA_VERSION = "winforge.dev/v0"
@@ -22,6 +23,7 @@ ROOT_FIELDS = {
     "name",
     "version",
     "runtime",
+    "profiles",
     "sources",
     "dependencies",
     "install",
@@ -30,6 +32,8 @@ ROOT_FIELDS = {
     "compatibility",
     "registry",
     "launch",
+    "entrypoints",
+    "fileAssociations",
     "state",
     "exports",
     "provenance",
@@ -37,8 +41,14 @@ ROOT_FIELDS = {
 RUNTIME_FIELDS = {"provider", "version", "source", "channel", "digest"}
 DEPENDENCY_FIELDS = {"kind", "verbs", "name", "version", "sha256"}
 INSTALL_FIELDS = {"kind", "source", "sha256", "target", "command", "args"}
-FILESYSTEM_FIELDS = {"source", "target", "sha256"}
+FILESYSTEM_FIELDS = {"source", "target", "sha256", "mode"}
 LAUNCH_FIELDS = {"entrypoint", "args", "env", "workingDirectory"}
+SOURCE_FIELDS = {"id", "name", "type", "policy", "url", "source", "path", "sha256", "description"}
+ENTRYPOINT_FIELDS = {"id", "name", "executable", "args", "env", "workingDirectory"}
+FILE_ASSOCIATION_FIELDS = {"entrypoint", "extensions", "mime"}
+ALLOWED_SOURCE_TYPES = {"installer", "iso", "archive", "files", "prefix", "font", "other"}
+ALLOWED_SOURCE_POLICIES = {"bring-your-own-files", "bring-your-own-installer", "bring-your-own-licensed-media", "bring-your-own-prefix", "redistributable", "synthetic-fixture", "external-local-file-required", "requires-local-installer-and-overlay", "class-marker-only"}
+ALLOWED_FILE_MAPPING_MODES = {"copy", "merge"}
 
 
 class ManifestError(ValueError):
@@ -156,18 +166,148 @@ class FileMapping:
     source: str
     target: str
     sha256: str | None = None
+    mode: str = "copy"
 
     @classmethod
     def from_dict(cls, data, index):
         _reject_unknown(data, FILESYSTEM_FIELDS, f"filesystem[{index}]")
+        mode = _optional_str(data, "mode") or "copy"
+        if mode not in ALLOWED_FILE_MAPPING_MODES:
+            raise ManifestError(f"filesystem[{index}].mode must be one of: " + ", ".join(sorted(ALLOWED_FILE_MAPPING_MODES)))
         return cls(
             _required_str(data, f"filesystem[{index}].source"),
             _required_str(data, f"filesystem[{index}].target"),
             _optional_str(data, "sha256"),
+            mode,
         )
 
     def to_dict(self):
-        return _drop_none({"source": self.source, "target": self.target, "sha256": self.sha256})
+        return _drop_none({"source": self.source, "target": self.target, "sha256": self.sha256, "mode": self.mode})
+
+
+@dataclass(frozen=True)
+class SourceDeclaration:
+    id: str
+    type: str
+    policy: str
+    url: str | None = None
+    source: str | None = None
+    path: str | None = None
+    sha256: str | None = None
+    description: str | None = None
+
+    @classmethod
+    def from_dict(cls, data, index):
+        _reject_unknown(data, SOURCE_FIELDS, f"sources[{index}]")
+        sid = _optional_str(data, "id") or _optional_str(data, "name")
+        if not sid:
+            raise ManifestError(f"sources[{index}].id is required")
+        source_type = _optional_str(data, "type") or "other"
+        if source_type not in ALLOWED_SOURCE_TYPES:
+            raise ManifestError(f"sources[{index}].type must be one of: " + ", ".join(sorted(ALLOWED_SOURCE_TYPES)))
+        policy = _optional_str(data, "policy") or "external-local-file-required"
+        if policy not in ALLOWED_SOURCE_POLICIES:
+            raise ManifestError(f"sources[{index}].policy must be one of: " + ", ".join(sorted(ALLOWED_SOURCE_POLICIES)))
+        return cls(
+            sid,
+            source_type,
+            policy,
+            _optional_str(data, "url"),
+            _optional_str(data, "source"),
+            _optional_str(data, "path"),
+            _optional_str(data, "sha256"),
+            _optional_str(data, "description"),
+        )
+
+    @property
+    def ref(self) -> str | None:
+        return self.url or self.source or self.path
+
+    def to_dict(self):
+        return _drop_none({
+            "id": self.id,
+            "type": self.type,
+            "policy": self.policy,
+            "url": self.url,
+            "source": self.source,
+            "path": self.path,
+            "sha256": self.sha256,
+            "description": self.description,
+        })
+
+    def __getitem__(self, key: str) -> Any:
+        # Backward-compatible read path for older code/tests that treated
+        # manifest.sources entries as raw dictionaries. `name` aliases the new
+        # normalized source id.
+        data = self.to_dict()
+        if key == "name":
+            return self.id
+        return data[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+
+@dataclass(frozen=True)
+class SuiteEntrypoint:
+    id: str
+    name: str
+    executable: str
+    args: list[str] = field(default_factory=list)
+    env: dict[str, str] = field(default_factory=dict)
+    working_directory: str | None = None
+
+    @classmethod
+    def from_dict(cls, data, index):
+        _reject_unknown(data, ENTRYPOINT_FIELDS, f"entrypoints[{index}]")
+        args = data.get("args", []) or []
+        env = data.get("env", {}) or {}
+        if not isinstance(args, list) or not all(isinstance(x, str) for x in args):
+            raise ManifestError(f"entrypoints[{index}].args must be a list of strings")
+        if not isinstance(env, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in env.items()):
+            raise ManifestError(f"entrypoints[{index}].env must be an object with string keys and values")
+        return cls(
+            _required_str(data, f"entrypoints[{index}].id"),
+            _required_str(data, f"entrypoints[{index}].name"),
+            _required_str(data, f"entrypoints[{index}].executable"),
+            args,
+            env,
+            _optional_str(data, "workingDirectory"),
+        )
+
+    def to_dict(self):
+        return _drop_none({
+            "id": self.id,
+            "name": self.name,
+            "executable": self.executable,
+            "args": self.args,
+            "env": self.env,
+            "workingDirectory": self.working_directory,
+        })
+
+
+@dataclass(frozen=True)
+class FileAssociation:
+    entrypoint: str
+    extensions: list[str] = field(default_factory=list)
+    mime: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data, index):
+        _reject_unknown(data, FILE_ASSOCIATION_FIELDS, f"fileAssociations[{index}]")
+        extensions = data.get("extensions", []) or []
+        mime = data.get("mime", []) or []
+        if not isinstance(extensions, list) or not all(isinstance(x, str) and x.startswith(".") for x in extensions):
+            raise ManifestError(f"fileAssociations[{index}].extensions must be a list of extensions like .docx")
+        if not isinstance(mime, list) or not all(isinstance(x, str) and x for x in mime):
+            raise ManifestError(f"fileAssociations[{index}].mime must be a list of MIME strings")
+        return cls(_required_str(data, f"fileAssociations[{index}].entrypoint"), extensions, mime)
+
+    def to_dict(self):
+        return _drop_none({"entrypoint": self.entrypoint, "extensions": self.extensions, "mime": self.mime})
 
 
 @dataclass(frozen=True)
@@ -203,23 +343,30 @@ class Manifest:
     name: str
     version: str
     runtime: RuntimeSpec
+    profiles: list[str]
     dependencies: list[DependencySpec]
     install: list[InstallStep]
     filesystem: list[FileMapping]
     launch: LaunchSpec
     provenance: dict[str, Any] = field(default_factory=dict)
-    sources: list[dict[str, Any]] = field(default_factory=list)
+    sources: list[SourceDeclaration] = field(default_factory=list)
     config: dict[str, Any] = field(default_factory=dict)
     compatibility: dict[str, Any] = field(default_factory=dict)
     registry: list[dict[str, Any]] = field(default_factory=list)
     state: dict[str, Any] = field(default_factory=dict)
     exports: list[dict[str, Any]] = field(default_factory=list)
+    entrypoints: list[SuiteEntrypoint] = field(default_factory=list)
+    file_associations: list[FileAssociation] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data):
         if not isinstance(data, dict):
             raise ManifestError("manifest root must be an object")
         _reject_unknown(data, ROOT_FIELDS, "manifest")
+        try:
+            data = apply_profiles(data)
+        except ProfileError as exc:
+            raise ManifestError(str(exc)) from exc
         schema = _required_str(data, "schemaVersion")
         if schema not in SUPPORTED_SCHEMA_VERSIONS:
             raise ManifestError(
@@ -241,15 +388,21 @@ class Manifest:
         except CompatibilityPolicyError as exc:
             raise ManifestError(str(exc)) from exc
         state = _object(data.get("state", {}) or {}, "state")
-        sources = _list(data.get("sources", []), "sources")
+        profiles = _string_list(data.get("profiles", []), "profiles")
+        sources = [SourceDeclaration.from_dict(x, i) for i, x in enumerate(_list(data.get("sources", []), "sources"))]
         registry = _list(data.get("registry", []), "registry")
         exports = _list(data.get("exports", []), "exports")
+        entrypoints = [SuiteEntrypoint.from_dict(x, i) for i, x in enumerate(_list(data.get("entrypoints", []), "entrypoints"))]
+        _validate_entrypoint_ids(entrypoints)
+        file_associations = [FileAssociation.from_dict(x, i) for i, x in enumerate(_list(data.get("fileAssociations", []), "fileAssociations"))]
+        _validate_file_associations(file_associations, entrypoints)
 
         return cls(
             schema,
             _required_str(data, "name"),
             _required_str(data, "version"),
             RuntimeSpec.from_dict(data["runtime"]),
+            profiles,
             [DependencySpec.from_dict(x, i) for i, x in enumerate(_list(data.get("dependencies", []), "dependencies"))],
             [InstallStep.from_dict(x, i) for i, x in enumerate(_list(data.get("install", []), "install"))],
             [FileMapping.from_dict(x, i) for i, x in enumerate(_list(data.get("filesystem", []), "filesystem"))],
@@ -261,6 +414,8 @@ class Manifest:
             registry,
             state,
             exports,
+            entrypoints,
+            file_associations,
         )
 
     def to_dict(self):
@@ -269,7 +424,8 @@ class Manifest:
             "name": self.name,
             "version": self.version,
             "runtime": self.runtime.to_dict(),
-            "sources": self.sources,
+            "profiles": self.profiles,
+            "sources": [x.to_dict() for x in self.sources],
             "dependencies": [x.to_dict() for x in self.dependencies],
             "install": [x.to_dict() for x in self.install],
             "filesystem": [x.to_dict() for x in self.filesystem],
@@ -277,10 +433,30 @@ class Manifest:
             "compatibility": self.compatibility,
             "registry": self.registry,
             "launch": self.launch.to_dict(),
+            "entrypoints": [x.to_dict() for x in self.entrypoints],
+            "fileAssociations": [x.to_dict() for x in self.file_associations],
             "state": self.state,
             "exports": self.exports,
             "provenance": self.provenance,
         })
+
+
+
+def _validate_entrypoint_ids(entrypoints: list[SuiteEntrypoint]) -> None:
+    seen: set[str] = set()
+    for index, entrypoint in enumerate(entrypoints):
+        if entrypoint.id in seen:
+            raise ManifestError(f"entrypoints[{index}].id is duplicated: {entrypoint.id}")
+        seen.add(entrypoint.id)
+
+
+def _validate_file_associations(associations: list[FileAssociation], entrypoints: list[SuiteEntrypoint]) -> None:
+    ids = {entrypoint.id for entrypoint in entrypoints}
+    if not ids and associations:
+        raise ManifestError("fileAssociations require entrypoints")
+    for index, association in enumerate(associations):
+        if association.entrypoint not in ids:
+            raise ManifestError(f"fileAssociations[{index}].entrypoint references unknown entrypoint: {association.entrypoint}")
 
 
 def load_manifest(path: Path):
@@ -576,6 +752,14 @@ def _list(value, key):
         return []
     if not isinstance(value, list) or not all(isinstance(x, dict) for x in value):
         raise ManifestError(f"{key} must be a list of objects")
+    return value
+
+
+def _string_list(value, key):
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(x, str) and x for x in value):
+        raise ManifestError(f"{key} must be a list of non-empty strings")
     return value
 
 

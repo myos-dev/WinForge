@@ -198,6 +198,51 @@ WinForge normalizes this to `winforge.compatibility-policy/v0`, records it in bu
 
 This is intentionally a high-level policy layer. Explicit loader ordering, COM timing controls, and trace/debug knobs are not primary schema.
 
+
+## BYO Installers, BYO Files, and Suite Apps
+
+Harder business apps often come from licensed customer-provided media, not public downloads. WinForge recipes can now make that source policy explicit and can layer pre-installed file trees deterministically:
+
+```yaml
+sources:
+  - id: office-files
+    type: files
+    path: sources/office-files/Program Files/Microsoft Office
+    policy: bring-your-own-files
+
+profiles:
+  - office-legacy-32bit
+
+filesystem:
+  - source: sources/office-files/Program Files/Microsoft Office
+    target: C:/Program Files/Microsoft Office
+    mode: merge
+```
+
+`mode: merge` copies the contents of the source directory into the target directory. That supports BlueBuild-style customer-provided folders such as `Program Files` trees without treating an entire Wine prefix as the source of truth. Installers/ISOs remain modeled through `install[]` and `sources[]`; BYO prefix import is still possible later as a convenience path, but reproducibility should be proven from installers/media/files first.
+
+Suite apps can also declare named entrypoints and file associations:
+
+```yaml
+entrypoints:
+  - id: word
+    name: Microsoft Word
+    executable: C:/Program Files/Microsoft Office/root/Office16/WINWORD.EXE
+  - id: excel
+    name: Microsoft Excel
+    executable: C:/Program Files/Microsoft Office/root/Office16/EXCEL.EXE
+
+fileAssociations:
+  - entrypoint: word
+    extensions:
+      - .doc
+      - .docx
+    mime:
+      - application/msword
+```
+
+See `examples/office-byo-files.winforge.yaml` for a legal BYO-files Office-shaped recipe. It intentionally contains no Office payloads.
+
 ## Source Integrity and Compatibility Evidence
 
 Before spending time in Wine, verify that recipe sources are actually present and hash-correct:
@@ -247,7 +292,7 @@ The packaged seed corpus is available with:
 winforge compat corpus
 ```
 
-It emits `schemaVersion: winforge.compat-corpus/v0` with starter apps/tier labels such as Notepad++, 7-Zip, PuTTY, WinSCP, DB Browser for SQLite, .NET sample, COM sample, and blocked driver-required app classes.
+It emits `schemaVersion: winforge.compat-corpus/v0` with starter apps/tier labels such as Notepad++, 7-Zip, PuTTY, WinSCP, DB Browser for SQLite, .NET sample, COM sample, Office BYO installer/files candidates, and blocked driver-required app classes.
 
 The bundled Notepad++ recipe remains a contract fixture until `sources/notepad-plus-plus.exe` and `overlays/notepad-plus-plus/config.xml` are provided. `sources verify` / `compat test` should report that clearly instead of failing later inside Wine.
 
