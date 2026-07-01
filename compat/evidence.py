@@ -10,6 +10,7 @@ from artifact.inspection import verify_bundle
 from builder.executor import execute_inside_container
 from core.manifest import load_manifest
 from core.sources import verify_manifest_sources
+from compat.failure_analysis import analyze_failure_path
 from runtime.launcher import build_run_plan, execute_run_plan
 from runtime.providers import resolve_runtime
 
@@ -168,6 +169,8 @@ def run_compat_test(
         payload["entrypointEvidence"] = _entrypoint_evidence_from_plans(run_plans)
 
         if not build_result.success:
+            failure_analysis = analyze_failure_path(bundle, write=True)
+            payload["failureAnalysis"] = failure_analysis
             payload["classification"] = "build-failed"
             return payload
         if not verification.get("valid"):

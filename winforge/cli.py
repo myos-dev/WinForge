@@ -35,6 +35,7 @@ from container.manager import (
 )
 from compat.corpus import load_default_corpus
 from compat.evidence import run_compat_test
+from compat.failure_analysis import FailureAnalysisError, analyze_failure_path
 from core.manifest import ManifestError, RuntimeSpec, load_manifest
 from core.sources import audit_manifest_sources, verify_manifest_sources
 from core.media import MediaStageError, stage_media
@@ -109,6 +110,12 @@ def cmd_media_stage(args):
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
+
+
+def cmd_failure_analyze(args):
+    result = analyze_failure_path(Path(args.path), write=not args.no_write)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
 
 def cmd_compat_test(args):
     result = run_compat_test(
@@ -205,6 +212,8 @@ def cmd_build(args):
         "ociMapping": oci,
         "execution": build_result.to_dict(),
     }
+    if not build_result.success:
+        result["failureAnalysis"] = analyze_failure_path(bundle_path, write=True)
 
     print(json.dumps(result, indent=2))
 
@@ -630,6 +639,15 @@ def build_parser():
     mp.add_argument("--overwrite", action="store_true", help="Replace an existing staged media directory")
     mp.set_defaults(func=cmd_media_stage)
 
+    # failure analysis
+    p = sub.add_parser("failure", help="Analyze Windows/Wine installer failure logs")
+    fsub = p.add_subparsers(dest="failure_command", required=True)
+
+    fp = fsub.add_parser("analyze", help="Analyze a WinForge bundle, log directory, or log file")
+    fp.add_argument("path", help="Bundle directory, log directory, or log file to analyze")
+    fp.add_argument("--no-write", action="store_true", help="Do not write metadata/failure-analysis.json or failure-summary.md")
+    fp.set_defaults(func=cmd_failure_analyze)
+
     # compatibility evidence
     p = sub.add_parser("compat", help="Collect compatibility evidence for a recipe")
     csub = p.add_subparsers(dest="compat_command", required=True)
@@ -720,6 +738,9 @@ def main(argv=None):
     except MediaStageError as exc:
         print(f"winforge: media error: {exc}", file=sys.stderr)
         return 11
+    except FailureAnalysisError as exc:
+        print(f"winforge: failure-analysis error: {exc}", file=sys.stderr)
+        return 12
     except ArtifactIndexError as exc:
         print(f"winforge: artifact index error: {exc}", file=sys.stderr)
         return 6

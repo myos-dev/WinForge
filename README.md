@@ -323,7 +323,16 @@ winforge compat test examples/notepad-plus-plus.winforge.yaml \
   --run-timeout 60
 ```
 
-The output is `schemaVersion: winforge.compat-test/v0`. `--mode dry-run` includes source integrity, dry-run bundle creation, bundle verification, and a `winforge.run-plan/v0` launch plan carrying runtime and compatibility policy. `--mode build` performs the real container build and records build execution evidence. `--mode run` records real build evidence plus `winforge.run-result/v0` app launch evidence.
+The output is `schemaVersion: winforge.compat-test/v0`. `--mode dry-run` includes source integrity, dry-run bundle creation, bundle verification, and a `winforge.run-plan/v0` launch plan carrying runtime and compatibility policy. `--mode build` performs the real container build and records build execution evidence. `--mode run` records real build evidence plus `winforge.run-result/v0` app launch evidence. Failed real builds attach `schemaVersion: winforge.failure-analysis/v0` and write `metadata/failure-analysis.json` plus `metadata/failure-summary.md` inside the bundle when Windows/Wine installer logs are available.
+
+Analyze an existing failed bundle or log tree directly with:
+
+```bash
+winforge failure analyze dist/my-app-1.0.0
+# emits winforge.failure-analysis/v0 and writes metadata/failure-analysis.json + failure-summary.md
+```
+
+The failure analyzer scans `logs/`, `prefix/drive_c/users/*/Temp`, and `prefix/drive_c/windows/temp` for `.log`/`.txt` files, prioritizes first MSI/Catalyst failure windows such as `Return value 3`, `MSI(ERROR)`, `Failed to install product`, and `ErrorCode`, and redacts product-key-like tokens and common secret assignments from report excerpts.
 
 The packaged seed corpus is available with:
 

@@ -130,14 +130,22 @@ Acceptance criteria:
 
 ### Slice 5: Windows installer failure analysis
 
+Status: implemented in initial v0 on `hermes-0.1/legacy-installer-followup`.
+
 Goal: turn large Wine/Windows installer logs into a concise, redacted failure report.
 
-Likely files:
+Implemented CLI:
 
-- new `compat/failure_analysis.py`
+```bash
+winforge failure analyze <bundle-or-log-path>
+```
+
+Touched files:
+
+- `compat/failure_analysis.py`
 - `compat/evidence.py`
-- `builder/executor.py`
 - `winforge/cli.py`
+- `tests/test_failure_analysis.py`
 
 Acceptance criteria:
 
@@ -178,11 +186,10 @@ Acceptance criteria:
 
 ## Recommended next development order
 
-1. **Slice 5: failure analysis** — next recommended slice; high leverage for any hard installer and easy to test against synthetic logs.
-3. **Slice 3: checkpoint inspect/resume** — makes slow dependency work reusable.
-4. **Slice 4: visible installer debug command** — removes ad hoc noVNC scripts once the evidence/reporting contracts are in place.
-5. **Slice 2: installer script linter** — small but useful guardrail; can be done earlier if touching install parsing.
-6. **Slice 6: runtime/profile matrix runner** — best after failure summaries are stable.
+1. **Slice 3: checkpoint inspect/resume** — next recommended slice; makes slow dependency work reusable.
+2. **Slice 4: visible installer debug command** — removes ad hoc noVNC scripts once the evidence/reporting contracts are in place.
+3. **Slice 2: installer script linter** — small but useful guardrail; can be done earlier if touching install parsing.
+4. **Slice 6: runtime/profile matrix runner** — best after failure summaries are stable.
 
 ## Review triggers
 
