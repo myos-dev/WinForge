@@ -201,21 +201,18 @@ This is intentionally a high-level policy layer. Explicit loader ordering, COM t
 
 ## BYO Installers, BYO Files, and Suite Apps
 
-Harder business apps often come from licensed customer-provided media, not public downloads. WinForge recipes can now make that source policy explicit and can layer pre-installed file trees deterministically:
+Harder business apps often come from licensed customer-provided media, not public downloads. WinForge recipes can make that source policy explicit and can layer pre-installed file trees deterministically:
 
 ```yaml
 sources:
-  - id: office-files
+  - id: suite-files
     type: files
-    path: sources/office-files/Program Files/Microsoft Office
+    path: sources/vendor-suite/Program Files/Vendor Suite
     policy: bring-your-own-files
 
-profiles:
-  - office-legacy-32bit
-
 filesystem:
-  - source: sources/office-files/Program Files/Microsoft Office
-    target: C:/Program Files/Microsoft Office
+  - source: sources/vendor-suite/Program Files/Vendor Suite
+    target: C:/Program Files/Vendor Suite
     mode: merge
 ```
 
@@ -225,23 +222,22 @@ Suite apps can also declare named entrypoints and file associations:
 
 ```yaml
 entrypoints:
-  - id: word
-    name: Microsoft Word
-    executable: C:/Program Files/Microsoft Office/root/Office16/WINWORD.EXE
-  - id: excel
-    name: Microsoft Excel
-    executable: C:/Program Files/Microsoft Office/root/Office16/EXCEL.EXE
+  - id: writer
+    name: Vendor Writer
+    executable: C:/Program Files/Vendor Suite/Writer.exe
+  - id: sheet
+    name: Vendor Sheet
+    executable: C:/Program Files/Vendor Suite/Sheet.exe
 
 fileAssociations:
-  - entrypoint: word
+  - entrypoint: writer
     extensions:
-      - .doc
       - .docx
     mime:
-      - application/msword
+      - application/vnd.openxmlformats-officedocument.wordprocessingml.document
 ```
 
-See `examples/office-byo-files.winforge.yaml` for a legal BYO-files Office-shaped recipe. It intentionally contains no Office payloads.
+Application-specific or proprietary recipes, including Office-shaped recipes, belong in `vic-legacy` or customer/private repositories rather than public WinForge.
 
 ## Source Integrity and Compatibility Evidence
 

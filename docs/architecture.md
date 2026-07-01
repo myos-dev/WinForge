@@ -61,7 +61,7 @@ This layer intentionally avoids raw loader-order and trace-control schema. Those
 
 `filesystem.mode: merge` is the first files-module primitive: it layers the contents of a user-provided directory into a Windows target directory, which is the reproducible path for pre-installed app directories such as Office `Program Files` trees. BYO prefix import remains a possible convenience path, but the architectural bias is toward reproducible installers/media/files.
 
-Suite metadata (`entrypoints[]` and `fileAssociations[]`) records app suites such as Word/Excel/PowerPoint without changing the current single default `launch.entrypoint` run path. Future run UX can select named entrypoints and route host files through this metadata.
+Suite metadata (`entrypoints[]` and `fileAssociations[]`) records multi-entry app suites without requiring public app-specific recipes. `winforge run --entrypoint <id>` can select named entrypoints, and host file arguments are mounted read-only and routed into Wine as `Z:` paths. Office/customer/proprietary recipes belong in `vic-legacy` or customer/private repositories, not in public WinForge.
 
 `core/profiles.py` expands reviewable named profiles into concrete compatibility/dependency policy. The initial `office-legacy-32bit` profile captures the current Office/Bottles evidence while preserving the expanded concrete policy in the manifest.
 

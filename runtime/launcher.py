@@ -22,6 +22,7 @@ RUN_PLAN_SCHEMA_VERSION = "winforge.run-plan/v0"
 RUN_RESULT_SCHEMA_VERSION = "winforge.run-result/v0"
 BUNDLE_MOUNT = "/opt/winforge/bundle"
 PREFIX_COPY = "/tmp/winforge-prefix"
+FILE_INPUT_MOUNT_ROOT = "/mnt/winforge-inputs"
 SUPPORTED_GRAPHICS = {"headless", "vnc"}
 _ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
@@ -38,6 +39,8 @@ def build_run_plan(
     vnc_port: int = 5900,
     novnc_port: int = 6080,
     container_name: str | None = None,
+    entrypoint: str | None = None,
+    files: list[Path | str] | None = None,
 ) -> dict[str, Any]:
     """Return a deterministic container run plan for a verified bundle."""
     bundle = Path(bundle_path)
@@ -48,6 +51,10 @@ def build_run_plan(
     graph = _load_json(bundle / "metadata" / "graph.json")
     runtime = dict(graph.get("runnerRuntime") or {})
     launch = dict(graph.get("launch") or {})
+    suite_entrypoints = list(graph.get("entrypoints") or [])
+    file_associations = list(graph.get("fileAssociations") or [])
+    selected_entrypoint, launch = _select_launch(launch, suite_entrypoints, entrypoint)
+    file_arguments = _file_arguments(files or [])
     graphics_contract = dict(graph.get("graphics") or {})
     compatibility_policy = dict((graph.get("compatibility") or {}).get("requestedPolicy") or {})
     compatibility_env = compatibility_environment(compatibility_policy)
@@ -65,7 +72,7 @@ def build_run_plan(
 
     image = _runtime_image(runtime)
     selected_engine = engine or _find_engine()
-    launch_command = _launch_command(runtime, launch)
+    launch_command = _launch_command(runtime, launch, [item["winePath"] for item in file_arguments])
     environment = _container_environment(mode)
     environment.update(compatibility_env)
     script = _launch_script(mode, launch, launch_command, compatibility_env)
@@ -79,6 +86,7 @@ def build_run_plan(
         vnc_port=vnc_port,
         novnc_port=novnc_port,
         container_name=container_name,
+        file_mounts=[item["mount"] for item in file_arguments],
     )
 
     return {
@@ -113,11 +121,16 @@ def build_run_plan(
             "noVncPort": novnc_port if mode == "vnc" else None,
         },
         "launch": launch,
+        "entrypoints": suite_entrypoints,
+        "fileAssociations": file_associations,
+        "selectedEntrypoint": selected_entrypoint,
+        "fileArguments": file_arguments,
         "launchCommand": launch_command,
         "container": {
             "engine": selected_engine,
             "image": image,
             "bundleMount": f"{bundle.resolve()}:{BUNDLE_MOUNT}:ro",
+            "fileMounts": [item["mount"] for item in file_arguments],
             "environment": environment,
             "script": script,
             "argv": argv,
@@ -187,11 +200,14 @@ def _container_argv(
     vnc_port: int,
     novnc_port: int,
     container_name: str | None,
+    file_mounts: list[str] | None = None,
 ) -> list[str]:
     argv = [engine, "run", "--rm"]
     if container_name:
         argv.extend(["--name", container_name])
     argv.extend(["-v", f"{bundle.resolve()}:{BUNDLE_MOUNT}:ro"])
+    for mount in file_mounts or []:
+        argv.extend(["-v", mount])
     for key, value in environment.items():
         argv.extend(["-e", f"{key}={value}"])
     if graphics == "vnc":
@@ -261,7 +277,67 @@ def _launch_script(
     return "\n".join(lines) + "\n"
 
 
-def _launch_command(runtime: dict[str, Any], launch: dict[str, Any]) -> list[str]:
+def _select_launch(
+    default_launch: dict[str, Any],
+    suite_entrypoints: list[Any],
+    requested: str | None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if requested is None:
+        entrypoint = default_launch.get("entrypoint")
+        selected = {
+            "id": "default",
+            "name": "Default launch entrypoint",
+            "source": "launch",
+            "executable": entrypoint,
+        }
+        return selected, dict(default_launch)
+
+    for item in suite_entrypoints:
+        if not isinstance(item, dict):
+            continue
+        if item.get("id") != requested:
+            continue
+        launch = {
+            "entrypoint": item.get("executable"),
+            "args": list(item.get("args") or []),
+            "env": dict(item.get("env") or {}),
+        }
+        if item.get("workingDirectory"):
+            launch["workingDirectory"] = item.get("workingDirectory")
+        selected = {
+            "id": item.get("id"),
+            "name": item.get("name"),
+            "source": "entrypoints",
+            "executable": item.get("executable"),
+        }
+        return selected, launch
+
+    available = [str(item.get("id")) for item in suite_entrypoints if isinstance(item, dict) and item.get("id")]
+    suffix = f" (available: {', '.join(available)})" if available else " (no suite entrypoints declared)"
+    raise RunError(f"unknown suite entrypoint: {requested}{suffix}")
+
+
+def _file_arguments(files: list[Path | str]) -> list[dict[str, str]]:
+    arguments: list[dict[str, str]] = []
+    for index, raw in enumerate(files):
+        host = Path(raw).expanduser().resolve()
+        if not host.exists():
+            raise RunError(f"input file does not exist: {host}")
+        if not host.is_file():
+            raise RunError(f"input path must be a file: {host}")
+        container_dir = f"{FILE_INPUT_MOUNT_ROOT}/{index}"
+        container_path = f"{container_dir}/{host.name}"
+        wine_path = "Z:" + container_path.replace("/", "\\")
+        arguments.append({
+            "hostPath": str(host),
+            "containerPath": container_path,
+            "winePath": wine_path,
+            "mount": f"{host.parent}:{container_dir}:ro",
+        })
+    return arguments
+
+
+def _launch_command(runtime: dict[str, Any], launch: dict[str, Any], file_args: list[str] | None = None) -> list[str]:
     entrypoint = launch.get("entrypoint")
     if not isinstance(entrypoint, str) or not entrypoint:
         raise RunError("bundle graph launch.entrypoint must be a non-empty string")
@@ -270,11 +346,12 @@ def _launch_command(runtime: dict[str, Any], launch: dict[str, Any]) -> list[str
         raise RunError("bundle graph launch.args must be a list of strings")
 
     launcher = str(runtime.get("launcher") or "wine")
+    extra_args = list(file_args or [])
     if launcher == "proton":
-        return ["/opt/proton-ge/proton", "run", entrypoint, *args]
+        return ["/opt/proton-ge/proton", "run", entrypoint, *args, *extra_args]
     if launcher == "umu":
-        return ["umu-run", entrypoint, *args]
-    return [launcher, entrypoint, *args]
+        return ["umu-run", entrypoint, *args, *extra_args]
+    return [launcher, entrypoint, *args, *extra_args]
 
 
 def _runtime_image(runtime: dict[str, Any]) -> str:

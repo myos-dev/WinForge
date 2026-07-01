@@ -71,36 +71,38 @@ For apps that are not cleanly installed from a public URL, recipes can model cus
 
 ```yaml
 sources:
-  - id: office-files
+  - id: suite-files
     type: files
-    path: sources/office-files/Program Files/Microsoft Office
+    path: sources/vendor-suite/Program Files/Vendor Suite
     policy: bring-your-own-files
 
-profiles:
-  - office-legacy-32bit
-
 filesystem:
-  - source: sources/office-files/Program Files/Microsoft Office
-    target: C:/Program Files/Microsoft Office
+  - source: sources/vendor-suite/Program Files/Vendor Suite
+    target: C:/Program Files/Vendor Suite
     mode: merge
 ```
 
-This is the preferred direction for pre-installed file directories. BYO prefix import may be useful for Bottles/Crossover experiments later, but reproducible source materialization from installers/media/files is the core WinForge question.
+This is the preferred direction for pre-installed file directories. BYO prefix import may be useful for Bottles/Crossover experiments later, but reproducible source materialization from installers/media/files is the core WinForge question. Proprietary app recipes should live in private/customer repositories such as `vic-legacy`, not in public WinForge.
 
 Suite apps can declare multiple entrypoints and file associations:
 
 ```yaml
 entrypoints:
-  - id: word
-    name: Microsoft Word
-    executable: C:/Program Files/Microsoft Office/root/Office16/WINWORD.EXE
+  - id: writer
+    name: Vendor Writer
+    executable: C:/Program Files/Vendor Suite/Writer.exe
 fileAssociations:
-  - entrypoint: word
+  - entrypoint: writer
     extensions:
-      - .doc
       - .docx
     mime:
-      - application/msword
+      - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+```
+
+`winforge run` can select a suite entrypoint and pass host files into the container as read-only input mounts:
+
+```bash
+winforge run vendor-suite --entrypoint writer ./document.docx
 ```
 
 ## Compatibility policy
@@ -181,7 +183,7 @@ The graph should not become a general runtime scheduler. Runtime should be borin
 
 `winforge run <bundle-or-app-ref>` consumes a verified bundle, either directly by path or resolved through the local artifact index, and must fail before container planning when `winforge bundle verify <bundle>` would fail.
 
-`winforge run --dry-run <bundle>` prints a `winforge.run-plan/v0` document containing the selected runtime image, graphics mode, launch command, container environment, and container argv without starting the container.
+`winforge run --dry-run <bundle>` prints a `winforge.run-plan/v0` document containing the selected runtime image, graphics mode, selected suite entrypoint, optional host-file routing, launch command, container environment, and container argv without starting the container. `--entrypoint <id>` selects a named `entrypoints[]` item. Additional positional file paths are mounted read-only under `/mnt/winforge-inputs/<n>` and passed to Wine as `Z:\mnt\winforge-inputs\<n>\<name>` arguments.
 
 `--graphics headless` runs through the runtime image Xvfb entrypoint without publishing ports. `--graphics vnc` publishes loopback-only VNC and noVNC/websockify ports (`127.0.0.1:<vnc-port>:5900` and `127.0.0.1:<novnc-port>:6080`) and starts `x11vnc` plus `websockify` inside the container.
 

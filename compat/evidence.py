@@ -31,6 +31,9 @@ def run_compat_test(
     mode: str = "dry-run",
     build_timeout: int = 600,
     run_timeout: int | None = None,
+    entrypoints: list[str] | None = None,
+    all_entrypoints: bool = False,
+    run_files: list[Path | str] | None = None,
 ) -> dict[str, Any]:
     """Run a compatibility evidence pass.
 
@@ -48,6 +51,7 @@ def run_compat_test(
     manifest = load_manifest(manifest_file)
     runtime = resolve_runtime(manifest.runtime)
     source_integrity = verify_manifest_sources(manifest, workspace=workspace_path)
+    requested_entrypoints = _requested_entrypoints(manifest, entrypoints or [], all_entrypoints)
 
     payload: dict[str, Any] = {
         "schemaVersion": COMPAT_TEST_SCHEMA_VERSION,
@@ -71,6 +75,8 @@ def run_compat_test(
         },
         "bundleVerification": None,
         "runPlan": None,
+        "runPlans": [],
+        "entrypointEvidence": [],
         "run": {"attempted": False, "reason": f"mode={mode}"},
         "success": False,
         "classification": "not-run",
@@ -83,7 +89,14 @@ def run_compat_test(
         if mode == "dry-run":
             artifact_entry = register_bundle(bundle, index_path=default_index_path(output_path))
             verification = verify_bundle(bundle)
-            run_plan = build_run_plan(bundle, graphics=graphics, engine=engine)
+            run_plans = _build_run_plans(
+                bundle,
+                graphics=graphics,
+                engine=engine,
+                entrypoints=requested_entrypoints,
+                run_files=run_files or [],
+            )
+            run_plan = run_plans[0]
             payload["build"] = {
                 "mode": "dry-run",
                 "attempted": True,
@@ -94,6 +107,8 @@ def run_compat_test(
             }
             payload["bundleVerification"] = verification
             payload["runPlan"] = run_plan
+            payload["runPlans"] = run_plans
+            payload["entrypointEvidence"] = _entrypoint_evidence_from_plans(run_plans)
             payload["success"] = bool(source_integrity.get("valid")) and bool(verification.get("valid"))
             payload["classification"] = "dry-run-planned" if payload["success"] else "source-integrity-failed"
             return payload
@@ -136,7 +151,16 @@ def run_compat_test(
             "execution": execution,
         }
         payload["bundleVerification"] = verification
-        payload["runPlan"] = build_run_plan(bundle, graphics=graphics, engine=engine)
+        run_plans = _build_run_plans(
+            bundle,
+            graphics=graphics,
+            engine=engine,
+            entrypoints=requested_entrypoints,
+            run_files=run_files or [],
+        )
+        payload["runPlan"] = run_plans[0]
+        payload["runPlans"] = run_plans
+        payload["entrypointEvidence"] = _entrypoint_evidence_from_plans(run_plans)
 
         if not build_result.success:
             payload["classification"] = "build-failed"
@@ -149,13 +173,21 @@ def run_compat_test(
             payload["classification"] = "build-passed"
             return payload
 
-        run_result = execute_run_plan(payload["runPlan"], timeout=run_timeout)
+        run_results = []
+        for plan in payload["runPlans"]:
+            run_result = execute_run_plan(plan, timeout=run_timeout)
+            run_results.append(run_result)
+        payload["entrypointEvidence"] = _entrypoint_evidence_from_plans(payload["runPlans"], run_results)
+        run_success = all(bool(result.get("success")) for result in run_results)
         payload["run"] = {
             "attempted": True,
-            "success": bool(run_result.get("success")),
-            "result": run_result,
+            "success": run_success,
+            "results": run_results,
+            "entrypoints": [item["entrypoint"] for item in payload["entrypointEvidence"]],
         }
-        payload["success"] = bool(run_result.get("success"))
+        if len(run_results) == 1:
+            payload["run"]["result"] = run_results[0]
+        payload["success"] = run_success
         payload["classification"] = "run-passed" if payload["success"] else "run-failed"
     except Exception as exc:  # pragma: no cover - exercised through CLI smoke/failures.
         payload["success"] = False
@@ -163,3 +195,45 @@ def run_compat_test(
         payload["error"] = str(exc)
 
     return payload
+
+
+
+def _requested_entrypoints(manifest, entrypoints: list[str], all_entrypoints: bool) -> list[str]:
+    if all_entrypoints and entrypoints:
+        raise ValueError("entrypoints and all_entrypoints are mutually exclusive")
+    if all_entrypoints:
+        return [entrypoint.id for entrypoint in manifest.entrypoints]
+    return list(entrypoints)
+
+
+def _build_run_plans(
+    bundle: Path,
+    *,
+    graphics: str,
+    engine: str | None,
+    entrypoints: list[str],
+    run_files: list[Path | str],
+) -> list[dict[str, Any]]:
+    if not entrypoints:
+        return [build_run_plan(bundle, graphics=graphics, engine=engine, files=run_files)]
+    return [
+        build_run_plan(bundle, graphics=graphics, engine=engine, entrypoint=entrypoint, files=run_files)
+        for entrypoint in entrypoints
+    ]
+
+
+def _entrypoint_evidence_from_plans(
+    plans: list[dict[str, Any]],
+    results: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    evidence = []
+    results = results or []
+    for index, plan in enumerate(plans):
+        item = {
+            "entrypoint": plan.get("selectedEntrypoint"),
+            "runPlan": plan,
+        }
+        if index < len(results):
+            item["run"] = results[index]
+        evidence.append(item)
+    return evidence

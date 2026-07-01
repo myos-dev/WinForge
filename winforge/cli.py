@@ -94,6 +94,9 @@ def cmd_compat_test(args):
         mode=args.mode,
         build_timeout=args.build_timeout,
         run_timeout=args.run_timeout,
+        entrypoints=args.entrypoint,
+        all_entrypoints=args.all_entrypoints,
+        run_files=args.file,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result.get("success") else 9
@@ -204,6 +207,8 @@ def cmd_run(args):
         vnc_port=args.vnc_port,
         novnc_port=args.novnc_port,
         container_name=args.name,
+        entrypoint=args.entrypoint,
+        files=args.files,
     )
     if args.dry_run:
         print(json.dumps(plan, indent=2, sort_keys=True))
@@ -415,6 +420,8 @@ def build_parser():
                    help="Container engine (podman, docker). Auto-detect if omitted.")
     p.add_argument("--dry-run", action="store_true",
                    help="Print the run plan without starting the container")
+    p.add_argument("--entrypoint", help="Named suite entrypoint id to run")
+    p.add_argument("files", nargs="*", help="Host files to pass to the selected application entrypoint")
     p.add_argument("--vnc-port", type=int, default=5900,
                    help="Host loopback VNC port for --graphics vnc")
     p.add_argument("--novnc-port", type=int, default=6080,
@@ -511,6 +518,9 @@ def build_parser():
     cp.add_argument("--mode", choices=["dry-run", "build", "run"], default="dry-run", help="Evidence mode: dry-run, real build, or real build+run")
     cp.add_argument("--build-timeout", type=int, default=600, help="Max seconds for real build mode")
     cp.add_argument("--run-timeout", type=int, default=None, help="Max seconds for real run mode")
+    cp.add_argument("--entrypoint", action="append", default=[], help="Suite entrypoint id to include in run-plan/run evidence; repeatable")
+    cp.add_argument("--all-entrypoints", action="store_true", help="Collect run-plan/run evidence for every manifest entrypoint")
+    cp.add_argument("--file", action="append", default=[], help="Host file to pass to selected entrypoint(s); repeatable")
     cp.set_defaults(func=cmd_compat_test)
 
     cp = csub.add_parser("corpus", help="Print the default curated compatibility corpus")

@@ -111,6 +111,8 @@ def build_execution_graph(manifest: Manifest) -> dict[str, Any]:
             "supportedModes": SUPPORTED_GRAPHICS_MODES,
         },
         "launch": manifest.launch.to_dict(),
+        "entrypoints": [entrypoint.to_dict() for entrypoint in manifest.entrypoints],
+        "fileAssociations": [association.to_dict() for association in manifest.file_associations],
         "compatibility": {
             "requiresExactRuntime": True,
             "policy": "exact-provider-version",

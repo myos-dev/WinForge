@@ -19,10 +19,10 @@ WinForge now prioritizes reproducible BYO source materialization over prefix-fir
 
 ## Consequences
 
-WinForge can now model legal Office-shaped recipes without containing Office payloads. The artifact can declare whether its inputs are `bring-your-own-files`, `bring-your-own-licensed-media`, or another explicit policy.
+WinForge can now model proprietary/business-suite recipes without containing proprietary payloads. The artifact can declare whether its inputs are `bring-your-own-files`, `bring-your-own-licensed-media`, or another explicit policy. Office-shaped recipes and customer-specific recipes should live in `vic-legacy` or customer/private repositories, not public WinForge.
 
 `mode: merge` makes pre-installed file directories first-class without requiring users to provide a whole Wine prefix. BYO prefix import remains a possible future convenience path, especially for importing personal Bottles, but it is not the primary reproducibility model.
 
-Suite metadata is recorded in manifests and artifacts, but v0 runtime selection still launches the default `launch.entrypoint`. A future phase should add `winforge run <app> --entrypoint <id>` and host-file routing using `fileAssociations`.
+Suite metadata is recorded in manifests and artifacts. Phase 6E adds `winforge run <app> --entrypoint <id>` and host-file routing; `fileAssociations` remain metadata for higher-level routing and future VIC integration.
 
 WinForge still must not download, encode, or redistribute cracked/pre-activated Office archives or activation bypasses.
