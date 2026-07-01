@@ -179,6 +179,7 @@ class OfficeProfileTests(unittest.TestCase):
         self.assertIn("msxml4", verbs)
         self.assertIn("mspatcha", verbs)
         self.assertIn("allfonts", verbs)
+        self.assertNotIn("gecko", verbs)
 
     def test_explicit_compatibility_overrides_profile_defaults(self):
         with tempfile.TemporaryDirectory() as tmp:

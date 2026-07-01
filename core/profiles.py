@@ -15,7 +15,9 @@ OFFICE_LEGACY_32BIT_VERBS = [
     "allfonts",
     "dotnet40",
     "gdiplus",
-    "gecko",
+    # Gecko appears in upstream Bottles/Rustring evidence as a runtime
+    # component, but current winetricks rejects it as an unknown verb.
+    # Do not emit it in a winetricks verb list.
     "riched20",
     "msxml4",
     "mspatcha",
