@@ -1,8 +1,10 @@
 """Tests for the WinForge container executor and build-script generator."""
 from __future__ import annotations
 import json, os, stat, tempfile, unittest
+from unittest.mock import patch
 from pathlib import Path
 
+from artifact.bundle import create_bundle
 from builder.pipeline import build_plan, generate_build_script
 from builder.executor import (
     BuildResult,
@@ -115,6 +117,38 @@ class BuildScriptGenerationTests(unittest.TestCase):
                             "Script should have at least one fi")
         self.assertGreater(script.count('echo'), 10,
                            "Script should have many echo statements")
+
+
+class ContainerExecutionCommandTests(unittest.TestCase):
+    def test_execute_inside_container_uses_selected_workspace_and_container_script_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(MANIFEST_JSON, encoding="utf-8")
+            manifest = load_manifest(manifest_path)
+            bundle = create_bundle(manifest, root / "dist", dry_run=False)
+
+            class Completed:
+                returncode = 0
+                stdout = "container ok"
+                stderr = ""
+
+            with patch("builder.executor.subprocess.run", return_value=Completed()) as run:
+                result = execute_inside_container(
+                    manifest,
+                    bundle,
+                    engine="docker",
+                    image_ref="local/runtime:test",
+                    timeout=5,
+                    workspace=workspace,
+                )
+
+        self.assertTrue(result.success)
+        argv = run.call_args.args[0]
+        self.assertIn(f"{workspace.resolve()}:/workspace:ro", argv)
+        self.assertEqual(argv[-3:], ["local/runtime:test", "bash", "/opt/winforge/build/run.sh"])
 
 
 class BuildResultTests(unittest.TestCase):

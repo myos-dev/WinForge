@@ -208,17 +208,46 @@ winforge sources verify examples/notepad-plus-plus.winforge.yaml --workspace .
 
 The output is `schemaVersion: winforge.source-integrity/v0` and reports every declared source, install source, filesystem overlay, resolved local path, sha256 result, warning, and error. v0 builds consume local workspace files; remote URLs are recorded as provenance but must be materialized locally for install/filesystem steps.
 
-For a dependency-light compatibility evidence pass:
+For a compatibility evidence pass:
 
 ```bash
+# Dependency-light planning evidence
 winforge compat test examples/notepad-plus-plus.winforge.yaml \
   --workspace . \
   --output dist \
   --graphics headless \
-  --engine docker
+  --engine docker \
+  --mode dry-run
+
+# Real container build evidence after local sources are present
+winforge compat test examples/notepad-plus-plus.winforge.yaml \
+  --workspace . \
+  --output dist-real \
+  --graphics headless \
+  --engine docker \
+  --mode build \
+  --build-timeout 2400
+
+# Real build plus bounded app launch evidence
+winforge compat test examples/notepad-plus-plus.winforge.yaml \
+  --workspace . \
+  --output dist-run \
+  --graphics headless \
+  --engine docker \
+  --mode run \
+  --build-timeout 2400 \
+  --run-timeout 60
 ```
 
-The output is `schemaVersion: winforge.compat-test/v0` and includes source integrity, dry-run bundle creation, bundle verification, and a `winforge.run-plan/v0` launch plan carrying runtime and compatibility policy. This command does not execute Wine yet; it creates an evidence report that makes missing sources, hash drift, graph problems, and launch-policy drift visible before real app testing.
+The output is `schemaVersion: winforge.compat-test/v0`. `--mode dry-run` includes source integrity, dry-run bundle creation, bundle verification, and a `winforge.run-plan/v0` launch plan carrying runtime and compatibility policy. `--mode build` performs the real container build and records build execution evidence. `--mode run` records real build evidence plus `winforge.run-result/v0` app launch evidence.
+
+The packaged seed corpus is available with:
+
+```bash
+winforge compat corpus
+```
+
+It emits `schemaVersion: winforge.compat-corpus/v0` with starter apps/tier labels such as Notepad++, 7-Zip, PuTTY, WinSCP, DB Browser for SQLite, .NET sample, COM sample, and blocked driver-required app classes.
 
 The bundled Notepad++ recipe remains a contract fixture until `sources/notepad-plus-plus.exe` and `overlays/notepad-plus-plus/config.xml` are provided. `sources verify` / `compat test` should report that clearly instead of failing later inside Wine.
 

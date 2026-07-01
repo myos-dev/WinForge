@@ -38,6 +38,7 @@ exclude = ["tests*", "docs*", "examples*", "cmd*"]
 namespaces = false
 
 [tool.setuptools.package-data]
+"compat.corpus" = ["*.json"]
 runtime = ["catalog.json"]
 container = [
   "build.sh",

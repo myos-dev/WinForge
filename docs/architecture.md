@@ -50,7 +50,9 @@ This layer intentionally avoids raw loader-order and trace-control schema. Those
 
 `core/sources.py` verifies local source presence and sha256 values before real Wine work. It emits `winforge.source-integrity/v0`, resolving `file://` and relative paths against the workspace root used by the build container.
 
-`compat/evidence.py` emits `winforge.compat-test/v0`: source integrity, dry-run bundle creation, bundle verification, and run-plan evidence. It is intentionally dependency-light and does not execute Wine yet. This creates a stable evidence envelope for real app compatibility testing without making early failures depend on container availability.
+`compat/evidence.py` emits `winforge.compat-test/v0`: source integrity, bundle creation, bundle verification, run-plan evidence, and optionally real build/run execution evidence. `--mode dry-run` is dependency-light. `--mode build` runs the real container build after source integrity passes. `--mode run` adds bounded app launch evidence. The evidence envelope stays stable as execution depth increases.
+
+`compat/corpus.py` and `compat/corpus/apps.json` provide the packaged `winforge.compat-corpus/v0` seed list for app testing. The corpus is a curation/input layer, not an automatic runtime selector.
 
 ### 7. Execution graph
 

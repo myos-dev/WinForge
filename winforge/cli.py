@@ -33,6 +33,7 @@ from container.manager import (
     list_definitions,
     get_image_ref,
 )
+from compat.corpus import load_default_corpus
 from compat.evidence import run_compat_test
 from core.manifest import ManifestError, RuntimeSpec, load_manifest
 from core.sources import verify_manifest_sources
@@ -90,9 +91,18 @@ def cmd_compat_test(args):
         workspace=Path(args.workspace) if args.workspace else Path.cwd(),
         graphics=args.graphics,
         engine=args.engine,
+        mode=args.mode,
+        build_timeout=args.build_timeout,
+        run_timeout=args.run_timeout,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result.get("success") else 9
+
+
+
+def cmd_compat_corpus(args):
+    print(json.dumps(load_default_corpus(), indent=2, sort_keys=True))
+    return 0
 
 
 def cmd_build(args):
@@ -495,10 +505,16 @@ def build_parser():
     cp = csub.add_parser("test", help="Run source/build/verify/run-plan compatibility evidence pass")
     cp.add_argument("manifest", help="Path to WinForge manifest")
     cp.add_argument("--workspace", help="Workspace root for relative local sources (default: cwd)")
-    cp.add_argument("--output", default="dist", help="Output directory for the dry-run bundle")
-    cp.add_argument("--graphics", choices=["headless", "vnc"], default="headless", help="Graphics mode for run-plan evidence")
-    cp.add_argument("--engine", default=None, help="Container engine name to record in run-plan evidence")
+    cp.add_argument("--output", default="dist", help="Output directory for evidence bundles")
+    cp.add_argument("--graphics", choices=["headless", "vnc"], default="headless", help="Graphics mode for run-plan/run evidence")
+    cp.add_argument("--engine", default=None, help="Container engine name to record/use in evidence")
+    cp.add_argument("--mode", choices=["dry-run", "build", "run"], default="dry-run", help="Evidence mode: dry-run, real build, or real build+run")
+    cp.add_argument("--build-timeout", type=int, default=600, help="Max seconds for real build mode")
+    cp.add_argument("--run-timeout", type=int, default=None, help="Max seconds for real run mode")
     cp.set_defaults(func=cmd_compat_test)
+
+    cp = csub.add_parser("corpus", help="Print the default curated compatibility corpus")
+    cp.set_defaults(func=cmd_compat_corpus)
 
     # export
     p = sub.add_parser("export", help="Export WinForge bundles to deployable artifacts")

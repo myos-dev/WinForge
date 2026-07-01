@@ -117,6 +117,7 @@ def execute_inside_container(
     engine: str | None = None,
     image_ref: str | None = None,
     timeout: int = 600,
+    workspace: Path | str | None = None,
 ) -> BuildResult:
     """Run the WinForge build inside the runtime provider's Docker/Podman container.
 
@@ -126,6 +127,7 @@ def execute_inside_container(
         engine:           Container engine (docker, podman). Auto-detect if None.
         image_ref:        Explicit OCI image reference. Resolve from manifest if None.
         timeout:          Max seconds for the entire build.
+        workspace:        Host workspace mounted read-only at /workspace.
 
     Returns:
         BuildResult with success/failure and metadata.
@@ -156,9 +158,9 @@ def execute_inside_container(
 
     # ---- Determine mount points ----
     # Bundle:       /host/bundle-name → /opt/winforge (inside container)
-    # Workspace:     /host/cwd         → /workspace       (for source-file access)
+    # Workspace:     selected workspace → /workspace       (for source-file access)
     host_bundle = bundle_path.resolve()
-    host_workspace = Path.cwd().resolve()
+    host_workspace = Path(workspace or Path.cwd()).resolve()
     mounts = [
         f"{host_bundle}:/opt/winforge",
         f"{host_workspace}:/workspace:ro",
@@ -175,7 +177,7 @@ def execute_inside_container(
     cmd.append(img)
 
     # Pass through xvfb-entrypoint.sh (which starts Xvfb, then execs CMD)
-    cmd.extend(["bash", str(script_path)])
+    cmd.extend(["bash", "/opt/winforge/build/run.sh"])
 
     # ---- Execute ----
     log_lines: list[str] = []

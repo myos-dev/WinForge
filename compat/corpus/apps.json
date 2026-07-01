@@ -1,0 +1,104 @@
+{
+  "apps": [
+    {
+      "compatibilityFocus": [
+        "simple-win32",
+        "installer",
+        "filesystem-overlay"
+      ],
+      "name": "Notepad++",
+      "notes": "Current repo recipe is a contract fixture until sources/notepad-plus-plus.exe and overlays/notepad-plus-plus/config.xml are provided.",
+      "recipe": "examples/notepad-plus-plus.winforge.yaml",
+      "slug": "notepad-plus-plus",
+      "sourcePolicy": "requires-local-installer-and-overlay",
+      "status": "fixture",
+      "tier": 1
+    },
+    {
+      "compatibilityFocus": [
+        "msi-or-exe-installer",
+        "shell-lite",
+        "basic-win32"
+      ],
+      "name": "7-Zip",
+      "slug": "7zip",
+      "sourcePolicy": "external-local-file-required",
+      "status": "candidate",
+      "tier": 1
+    },
+    {
+      "compatibilityFocus": [
+        "portable-exe",
+        "simple-win32",
+        "network-ui"
+      ],
+      "name": "PuTTY",
+      "slug": "putty",
+      "sourcePolicy": "external-local-file-required",
+      "status": "candidate",
+      "tier": 1
+    },
+    {
+      "compatibilityFocus": [
+        "installer",
+        "network-ui",
+        "registry-settings"
+      ],
+      "name": "WinSCP",
+      "slug": "winscp",
+      "sourcePolicy": "external-local-file-required",
+      "status": "candidate",
+      "tier": 2
+    },
+    {
+      "compatibilityFocus": [
+        "qt-gui",
+        "file-workflow",
+        "fonts"
+      ],
+      "name": "DB Browser for SQLite",
+      "slug": "db-browser-sqlite",
+      "sourcePolicy": "external-local-file-required",
+      "status": "candidate",
+      "tier": 2
+    },
+    {
+      "compatibilityFocus": [
+        "dotnet-framework",
+        "winetricks",
+        "windows-version-policy"
+      ],
+      "name": ".NET Framework sample app",
+      "slug": "dotnet-framework-sample",
+      "sourcePolicy": "synthetic-fixture-needed",
+      "status": "candidate",
+      "tier": 3
+    },
+    {
+      "compatibilityFocus": [
+        "com-registration",
+        "registry",
+        "automation-boundary"
+      ],
+      "name": "COM automation sample app",
+      "slug": "com-automation-sample",
+      "sourcePolicy": "synthetic-fixture-needed",
+      "status": "candidate",
+      "tier": 3
+    },
+    {
+      "compatibilityFocus": [
+        "kernel-driver",
+        "vm-fallback"
+      ],
+      "name": "Driver-required app class",
+      "notes": "Use as a blocked capability marker, not as a Wine target.",
+      "slug": "driver-required-app",
+      "sourcePolicy": "class-marker-only",
+      "status": "blocked",
+      "tier": 5
+    }
+  ],
+  "description": "Seed compatibility corpus for evidence-driven WinForge app testing.",
+  "schemaVersion": "winforge.compat-corpus/v0"
+}

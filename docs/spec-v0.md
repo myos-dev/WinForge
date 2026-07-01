@@ -92,7 +92,9 @@ Legacy `config.wine.arch`, `config.wine.windowsVersion`, `config.wine.dllOverrid
 
 `file://relative/path` and bare relative paths resolve against the selected workspace root. Real v0 builds mount the workspace at `/workspace`, and generated build scripts now resolve relative install/filesystem sources under that mount.
 
-`winforge compat test <manifest>` emits `schemaVersion: winforge.compat-test/v0`. It performs a dependency-light evidence pass: source integrity, dry-run bundle materialization, bundle verification, and run-plan generation. It does not execute Wine or container builds yet; real build/run evidence should build on this report format.
+`winforge compat test <manifest>` emits `schemaVersion: winforge.compat-test/v0`. It supports `--mode dry-run`, `--mode build`, and `--mode run`. Dry-run mode records source integrity, dry-run bundle materialization, bundle verification, and run-plan generation. Build mode performs the real container build after source integrity passes and records `metadata/execution-result.json` plus structured build evidence. Run mode adds bounded `winforge.run-result/v0` launch evidence.
+
+`winforge compat corpus` emits `schemaVersion: winforge.compat-corpus/v0`, a packaged seed app corpus with tiers, statuses, source policies, and compatibility focus tags. The corpus is not an automatic compatibility database; it is the starter list for repeatable evidence collection.
 
 ## Artifact model
 
