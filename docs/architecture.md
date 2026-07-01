@@ -71,6 +71,8 @@ Suite metadata (`entrypoints[]` and `fileAssociations[]`) records multi-entry ap
 
 `winforge runners list|ensure|diagnose` exposes the runner-cache lifecycle. Diagnostics parse ELF interpreters so old 32-bit Wine builds can fail with actionable evidence such as missing `/lib/ld-linux.so.2` instead of an opaque shell error. This is required for 7040/VIC Office evidence because the Rustring/Bottles reference depends on legacy x86 Wine builds hosted by PlayOnLinux/Phoenicis.
 
+Real build/run execution keeps runner archives host-cached but container-executed: `runtime.runner` requests are mounted read-only at `/opt/winforge-runner`, `WINFORGE_RUNNER_BIN` is exported, and the mounted `bin/` is prepended to `PATH` inside the runtime image. Host diagnostics may show missing 32-bit loader support, but execution can still proceed inside Wine runtime images because those images install i386 Wine support.
+
 ### 9. Execution graph
 
 `metadata/graph.json` is first-class build/provenance output. It records runtime image selection, artifact identity, launch contract, graphics modes, build phase order, and exact-runtime compatibility and requested compatibility policy. It should not become a general runtime scheduler; runtime execution should verify the artifact, prepare state, start display services if requested, and launch the application contract.
@@ -85,7 +87,7 @@ Suite metadata (`entrypoints[]` and `fileAssociations[]`) records multi-entry ap
 
 ### 12. Run planning and execution
 
-`runtime/launcher.py` implements the current `winforge run` path. It consumes verified bundle output, emits `winforge.run-plan/v0` for dry runs, and executes the plan with Podman/Docker when not in dry-run mode. Headless mode uses Xvfb without host ports; VNC mode exposes loopback-only VNC/noVNC ports and starts `x11vnc` plus `websockify` inside the runtime container. Bundles are mounted read-only and prefixes are copied before launch so runtime mutation affects state, not the sealed artifact.
+`runtime/launcher.py` implements the current `winforge run` path. It consumes verified bundle output, emits `winforge.run-plan/v0` for dry runs, and executes the plan with Podman/Docker when not in dry-run mode. Headless mode uses Xvfb without host ports; VNC mode exposes loopback-only VNC/noVNC ports and starts `x11vnc` plus `websockify` inside the runtime container. Bundles are mounted read-only and prefixes are copied before launch so runtime mutation affects state, not the sealed artifact. If a graph requests `runtime.runner`, run planning records runner cache status and real execution requires a populated cache so the selected Wine runner can be mounted into the container.
 
 ### 13. OCI application export
 

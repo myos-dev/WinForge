@@ -146,6 +146,8 @@ Legacy `config.wine.arch`, `config.wine.windowsVersion`, `config.wine.dllOverrid
 
 `winforge runners ensure <alias>` downloads, verifies, and extracts the runner under the local cache, emitting `winforge.runner-cache/v0`. `winforge runners diagnose <alias-or-path>` emits `winforge.runner-diagnostic/v0`; it detects common host/runtime blockers such as missing 32-bit ELF interpreters (`/lib/ld-linux.so.2`) before users get an opaque shell error like “cannot execute: required file not found”.
 
+If a bundle graph contains `runnerRuntime.runner`, `winforge run --runner-cache-dir <dir>` reports `runnerCache` in the `winforge.run-plan/v0`. If the cached runner is present, the plan mounts the runner directory read-only at `/opt/winforge-runner`, exports `WINFORGE_RUNNER_ID` and `WINFORGE_RUNNER_BIN=/opt/winforge-runner/bin`, and prepends that bin directory to `PATH` before launching Wine. Dry-run planning may report `runnerCache.status: missing`; real run execution requires the runner cache to be present. Real build and compatibility evidence commands use the same cache directory to mount the selected runner into the runtime container.
+
 ## Source integrity and compatibility evidence
 
 `winforge sources verify <manifest>` emits `schemaVersion: winforge.source-integrity/v0`. The report includes `valid`, `summary`, `items`, `errors`, and `warnings`. Each item records location (`sources[i]`, `install[i].source`, or `filesystem[i].source`), source reference, resolved local path when applicable, expected/actual sha256, and status (`verified`, `present`, `missing`, `hash-mismatch`, `remote`, etc.).
@@ -198,11 +200,11 @@ The graph should not become a general runtime scheduler. Runtime should be borin
 
 `winforge run <bundle-or-app-ref>` consumes a verified bundle, either directly by path or resolved through the local artifact index, and must fail before container planning when `winforge bundle verify <bundle>` would fail.
 
-`winforge run --dry-run <bundle>` prints a `winforge.run-plan/v0` document containing the selected runtime image, graphics mode, selected suite entrypoint, optional host-file routing, launch command, container environment, and container argv without starting the container. `--entrypoint <id>` selects a named `entrypoints[]` item. Additional positional file paths are mounted read-only under `/mnt/winforge-inputs/<n>` and passed to Wine as `Z:\mnt\winforge-inputs\<n>\<name>` arguments.
+`winforge run --dry-run <bundle>` prints a `winforge.run-plan/v0` document containing the selected runtime image, graphics mode, selected suite entrypoint, optional host-file routing, optional runner-cache mount, launch command, container environment, and container argv without starting the container. `--entrypoint <id>` selects a named `entrypoints[]` item. Additional positional file paths are mounted read-only under `/mnt/winforge-inputs/<n>` and passed to Wine as `Z:\mnt\winforge-inputs\<n>\<name>` arguments.
 
 `--graphics headless` runs through the runtime image Xvfb entrypoint without publishing ports. `--graphics vnc` publishes loopback-only VNC and noVNC/websockify ports (`127.0.0.1:<vnc-port>:5900` and `127.0.0.1:<novnc-port>:6080`) and starts `x11vnc` plus `websockify` inside the container.
 
-The v0 runner mounts the bundle read-only at `/opt/winforge/bundle`, copies `prefix/` to `/tmp/winforge-prefix`, sets `WINEPREFIX` to that copy, then launches the application entrypoint. This preserves the sealed artifact while allowing Wine to mutate runtime state.
+The v0 runner mounts the bundle read-only at `/opt/winforge/bundle`, copies `prefix/` to `/tmp/winforge-prefix`, sets `WINEPREFIX` to that copy, then launches the application entrypoint. When a cached runner is mounted, it lives at `/opt/winforge-runner` and is selected through `PATH`/`WINFORGE_RUNNER_BIN`. This preserves the sealed artifact while allowing Wine to mutate runtime state.
 
 ## OCI application image export
 

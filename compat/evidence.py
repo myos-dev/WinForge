@@ -34,6 +34,7 @@ def run_compat_test(
     entrypoints: list[str] | None = None,
     all_entrypoints: bool = False,
     run_files: list[Path | str] | None = None,
+    runner_cache_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Run a compatibility evidence pass.
 
@@ -95,6 +96,7 @@ def run_compat_test(
                 engine=engine,
                 entrypoints=requested_entrypoints,
                 run_files=run_files or [],
+                runner_cache_dir=runner_cache_dir,
             )
             run_plan = run_plans[0]
             payload["build"] = {
@@ -125,14 +127,15 @@ def run_compat_test(
             payload["classification"] = "source-integrity-failed"
             return payload
 
-        build_result = execute_inside_container(
-            manifest,
-            bundle,
-            engine=engine,
-            image_ref=runtime.oci_image,
-            timeout=build_timeout,
-            workspace=workspace_path,
-        )
+        build_kwargs = {
+            "engine": engine,
+            "image_ref": runtime.oci_image,
+            "timeout": build_timeout,
+            "workspace": workspace_path,
+        }
+        if manifest.runtime.runner or runner_cache_dir is not None:
+            build_kwargs["runner_cache_dir"] = runner_cache_dir
+        build_result = execute_inside_container(manifest, bundle, **build_kwargs)
         execution = build_result.to_dict()
         (bundle / "metadata" / "execution-result.json").write_text(
             json_dumps(execution) + "\n",
@@ -157,6 +160,8 @@ def run_compat_test(
             engine=engine,
             entrypoints=requested_entrypoints,
             run_files=run_files or [],
+            runner_cache_dir=runner_cache_dir,
+            require_runner=True,
         )
         payload["runPlan"] = run_plans[0]
         payload["runPlans"] = run_plans
@@ -213,11 +218,28 @@ def _build_run_plans(
     engine: str | None,
     entrypoints: list[str],
     run_files: list[Path | str],
+    runner_cache_dir: Path | str | None = None,
+    require_runner: bool = False,
 ) -> list[dict[str, Any]]:
     if not entrypoints:
-        return [build_run_plan(bundle, graphics=graphics, engine=engine, files=run_files)]
+        return [build_run_plan(
+            bundle,
+            graphics=graphics,
+            engine=engine,
+            files=run_files,
+            runner_cache_dir=runner_cache_dir,
+            require_runner=require_runner,
+        )]
     return [
-        build_run_plan(bundle, graphics=graphics, engine=engine, entrypoint=entrypoint, files=run_files)
+        build_run_plan(
+            bundle,
+            graphics=graphics,
+            engine=engine,
+            entrypoint=entrypoint,
+            files=run_files,
+            runner_cache_dir=runner_cache_dir,
+            require_runner=require_runner,
+        )
         for entrypoint in entrypoints
     ]
 

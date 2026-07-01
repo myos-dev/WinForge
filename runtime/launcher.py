@@ -17,12 +17,14 @@ from typing import Any
 
 from artifact.inspection import verify_bundle
 from core.compatibility import compatibility_environment
+from runtime.runner_cache import DEFAULT_CACHE_DIR, diagnose_runner
 
 RUN_PLAN_SCHEMA_VERSION = "winforge.run-plan/v0"
 RUN_RESULT_SCHEMA_VERSION = "winforge.run-result/v0"
 BUNDLE_MOUNT = "/opt/winforge/bundle"
 PREFIX_COPY = "/tmp/winforge-prefix"
 FILE_INPUT_MOUNT_ROOT = "/mnt/winforge-inputs"
+RUNNER_CONTAINER_DIR = "/opt/winforge-runner"
 SUPPORTED_GRAPHICS = {"headless", "vnc"}
 _ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
@@ -41,6 +43,8 @@ def build_run_plan(
     container_name: str | None = None,
     entrypoint: str | None = None,
     files: list[Path | str] | None = None,
+    runner_cache_dir: Path | str | None = None,
+    require_runner: bool = False,
 ) -> dict[str, Any]:
     """Return a deterministic container run plan for a verified bundle."""
     bundle = Path(bundle_path)
@@ -73,9 +77,18 @@ def build_run_plan(
     image = _runtime_image(runtime)
     selected_engine = engine or _find_engine()
     launch_command = _launch_command(runtime, launch, [item["winePath"] for item in file_arguments])
+    runner_cache = _runner_cache_plan(runtime, runner_cache_dir, require_runner=require_runner)
     environment = _container_environment(mode)
     environment.update(compatibility_env)
-    script = _launch_script(mode, launch, launch_command, compatibility_env)
+    if runner_cache and runner_cache.get("status") == "present":
+        environment.update(runner_cache["environment"])
+    script = _launch_script(
+        mode,
+        launch,
+        launch_command,
+        compatibility_env,
+        runner_enabled=bool(runner_cache and runner_cache.get("status") == "present"),
+    )
     argv = _container_argv(
         selected_engine,
         bundle,
@@ -86,7 +99,7 @@ def build_run_plan(
         vnc_port=vnc_port,
         novnc_port=novnc_port,
         container_name=container_name,
-        file_mounts=[item["mount"] for item in file_arguments],
+        file_mounts=[item["mount"] for item in file_arguments] + ([runner_cache["mount"]] if runner_cache and runner_cache.get("status") == "present" else []),
     )
 
     return {
@@ -129,12 +142,14 @@ def build_run_plan(
         "fileAssociations": file_associations,
         "selectedEntrypoint": selected_entrypoint,
         "fileArguments": file_arguments,
+        "runnerCache": runner_cache,
         "launchCommand": launch_command,
         "container": {
             "engine": selected_engine,
             "image": image,
             "bundleMount": f"{bundle.resolve()}:{BUNDLE_MOUNT}:ro",
             "fileMounts": [item["mount"] for item in file_arguments],
+            "runnerMount": runner_cache["mount"] if runner_cache and runner_cache.get("status") == "present" else None,
             "environment": environment,
             "script": script,
             "argv": argv,
@@ -183,6 +198,69 @@ def execute_run_plan(plan: dict[str, Any], *, timeout: int | None = None) -> dic
             "stderr": exc.stderr or f"winforge run timed out after {timeout}s",
             "error": f"timed out after {timeout}s",
         }
+
+
+
+def _runner_cache_plan(
+    runtime: dict[str, Any],
+    cache_dir: Path | str | None,
+    *,
+    require_runner: bool,
+) -> dict[str, Any] | None:
+    runner_id = runtime.get("runner")
+    runner_source = runtime.get("runnerSource")
+    runner_url = runtime.get("runnerUrl")
+    if not isinstance(runner_id, str) or not runner_id:
+        return None
+    # Ordinary runtime catalog entries use labels such as winehq-stable as
+    # provider-runner metadata. Only downloadable archive runners have source
+    # and URL provenance and therefore participate in the host cache mount.
+    if not runner_source or not runner_url:
+        return None
+
+    root = Path(cache_dir or DEFAULT_CACHE_DIR).expanduser().resolve()
+    runner_dir = root / runner_id
+    wine_path = runner_dir / "bin" / "wine"
+    base = {
+        "schemaVersion": "winforge.runner-mount/v0",
+        "runnerId": runner_id,
+        "cacheDir": str(root),
+        "runnerDir": str(runner_dir),
+        "winePath": str(wine_path),
+        "containerDir": RUNNER_CONTAINER_DIR,
+        "containerBin": f"{RUNNER_CONTAINER_DIR}/bin",
+    }
+    if not wine_path.exists():
+        payload = {**base, "status": "missing"}
+        if require_runner:
+            raise RunError(
+                f"cached runner is missing: {runner_id}. Run `winforge runners ensure {runner_id}` "
+                "or pass --runner-cache-dir pointing at a populated cache."
+            )
+        return payload
+
+    return {
+        **base,
+        "status": "present",
+        "mount": f"{runner_dir}:{RUNNER_CONTAINER_DIR}:ro",
+        "environment": {
+            "WINFORGE_RUNNER_ID": runner_id,
+            "WINFORGE_RUNNER_BIN": f"{RUNNER_CONTAINER_DIR}/bin",
+        },
+        "diagnostic": diagnose_runner(runner_dir),
+    }
+
+
+def _runner_launch_script_lines(enabled: bool) -> list[str]:
+    if not enabled:
+        return []
+    return [
+        'if [ -n "${WINFORGE_RUNNER_BIN:-}" ]; then',
+        '  echo "[winforge] Using cached Wine runner: ${WINFORGE_RUNNER_ID:-unknown} at $WINFORGE_RUNNER_BIN"',
+        '  export PATH="$WINFORGE_RUNNER_BIN:$PATH"',
+        '  export WINE="$WINFORGE_RUNNER_BIN/wine"',
+        'fi',
+    ]
 
 
 def _find_engine() -> str:
@@ -238,6 +316,8 @@ def _launch_script(
     launch: dict[str, Any],
     command: list[str],
     compatibility_env: dict[str, str] | None = None,
+    *,
+    runner_enabled: bool = False,
 ) -> str:
     lines = [
         "set -euo pipefail",
@@ -247,6 +327,7 @@ def _launch_script(
         f"export WINEPREFIX={shlex.quote(PREFIX_COPY)}",
         "export WINEFS=launcher",
         f"export WINFORGE_GRAPHICS={shlex.quote(mode)}",
+        *_runner_launch_script_lines(runner_enabled),
         "rm -rf \"$WINEPREFIX\"",
         "cp -a \"$WINFORGE_PREFIX_SOURCE\" \"$WINEPREFIX\"",
     ]

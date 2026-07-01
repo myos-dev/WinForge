@@ -70,6 +70,22 @@ def build_plan(manifest: Manifest) -> list[dict[str, object]]:
     ]
 
 
+def _runner_environment_lines(manifest: Manifest) -> list[str]:
+    """Return shell lines that select a mounted Wine runner archive when present."""
+    if not manifest.runtime.runner:
+        return []
+    return [
+        "### Downloadable Wine runner ##################################",
+        'if [ -n "${WINFORGE_RUNNER_BIN:-}" ]; then',
+        '  echo "[winforge] Using cached Wine runner: ${WINFORGE_RUNNER_ID:-unknown} at $WINFORGE_RUNNER_BIN"',
+        '  export PATH="$WINFORGE_RUNNER_BIN:$PATH"',
+        '  export WINE="$WINFORGE_RUNNER_BIN/wine"',
+        'fi',
+        "echo ''",
+        "",
+    ]
+
+
 def _compatibility_policy_lines(manifest: Manifest) -> list[str]:
     """Return shell lines that export high-level compatibility policy."""
     policy = manifest.compatibility or {}
@@ -172,6 +188,7 @@ def generate_build_script(
         f'echo "[winforge] Workspace mount: {workspace_mount}"',
         "echo ''",
         "",
+        *_runner_environment_lines(manifest),
         *_compatibility_policy_lines(manifest),
         # ------------------------------------------------------------------
         "### Phase 1: init-prefix ##########################################",

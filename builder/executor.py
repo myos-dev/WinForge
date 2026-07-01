@@ -13,6 +13,7 @@ from typing import Any
 from builder.pipeline import generate_build_script
 from core.manifest import Manifest
 from runtime.providers import resolve_runtime
+from runtime.runner_cache import ensure_runner
 
 
 @dataclass
@@ -30,6 +31,7 @@ class BuildResult:
     prefix_size: int | None = None
     prefix_file_count: int | None = None
     error: str | None = None
+    runner_cache: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -43,6 +45,7 @@ class BuildResult:
             "prefixSize": self.prefix_size,
             "prefixFileCount": self.prefix_file_count,
             "error": self.error,
+            "runnerCache": self.runner_cache,
         }
 
 
@@ -106,6 +109,29 @@ def _resolve_image_ref(manifest: Manifest, engine: str) -> str | None:
     return None
 
 
+RUNNER_CONTAINER_DIR = "/opt/winforge-runner"
+
+
+def _prepare_runner_cache(manifest: Manifest, cache_dir: Path | str | None) -> dict[str, Any] | None:
+    runner_id = manifest.runtime.runner
+    if not runner_id:
+        return None
+    result = ensure_runner(runner_id, cache_dir=Path(cache_dir) if cache_dir else None)
+    runner_dir = Path(str(result["runnerDir"])).resolve()
+    payload = dict(result)
+    payload.update({
+        "runnerId": runner_id,
+        "containerDir": RUNNER_CONTAINER_DIR,
+        "containerBin": f"{RUNNER_CONTAINER_DIR}/bin",
+        "mount": f"{runner_dir}:{RUNNER_CONTAINER_DIR}:ro",
+        "environment": {
+            "WINFORGE_RUNNER_ID": runner_id,
+            "WINFORGE_RUNNER_BIN": f"{RUNNER_CONTAINER_DIR}/bin",
+        },
+    })
+    return payload
+
+
 # ---------------------------------------------------------------------------
 # Container execution
 # ---------------------------------------------------------------------------
@@ -118,6 +144,7 @@ def execute_inside_container(
     image_ref: str | None = None,
     timeout: int = 600,
     workspace: Path | str | None = None,
+    runner_cache_dir: Path | str | None = None,
 ) -> BuildResult:
     """Run the WinForge build inside the runtime provider's Docker/Podman container.
 
@@ -128,6 +155,7 @@ def execute_inside_container(
         image_ref:        Explicit OCI image reference. Resolve from manifest if None.
         timeout:          Max seconds for the entire build.
         workspace:        Host workspace mounted read-only at /workspace.
+        runner_cache_dir: Optional runner cache root for runtime.runner archives.
 
     Returns:
         BuildResult with success/failure and metadata.
@@ -141,6 +169,9 @@ def execute_inside_container(
         # Fallback: construct a ref for the user's information
         from container.manager import get_image_ref as _img_ref
         img = _img_ref(manifest.runtime.provider, manifest.runtime.version)
+
+    # ---- Resolve optional downloadable runner cache ----
+    runner_cache = _prepare_runner_cache(manifest, runner_cache_dir)
 
     # ---- Write the build script into the bundle ----
     script_path = bundle_path / "build" / "run.sh"
@@ -165,6 +196,10 @@ def execute_inside_container(
         f"{host_bundle}:/opt/winforge",
         f"{host_workspace}:/workspace:ro",
     ]
+    environment: dict[str, str] = {}
+    if runner_cache:
+        mounts.append(runner_cache["mount"])
+        environment.update(runner_cache["environment"])
 
     # ---- Build the docker/podman run command ----
     cmd = [
@@ -172,6 +207,8 @@ def execute_inside_container(
     ]
     for m in mounts:
         cmd.extend(["-v", m])
+    for key, value in environment.items():
+        cmd.extend(["-e", f"{key}={value}"])
     # Ensure shared memory is large enough for Wine
     cmd.extend(["--shm-size", "2g"])
     cmd.append(img)
@@ -185,6 +222,8 @@ def execute_inside_container(
     log_lines.append(f"[winforge] Image:  {img}")
     log_lines.append(f"[winforge] Bundle: {host_bundle}")
     log_lines.append(f"[winforge] CWD:    {host_workspace}")
+    if runner_cache:
+        log_lines.append(f"[winforge] Runner: {runner_cache['runnerId']} mounted at {runner_cache['containerDir']}")
     log_lines.append("")
 
     try:
@@ -234,6 +273,7 @@ def execute_inside_container(
             log=log_text,
             prefix_size=prefix_size,
             prefix_file_count=prefix_file_count,
+            runner_cache=runner_cache,
         )
 
     except FileNotFoundError:
@@ -247,6 +287,7 @@ def execute_inside_container(
             runtime_version=manifest.runtime.version,
             image_ref=img, engine=engine,
             error=error,
+            runner_cache=runner_cache,
         )
 
     except subprocess.TimeoutExpired:
@@ -259,6 +300,7 @@ def execute_inside_container(
             runtime_version=manifest.runtime.version,
             image_ref=img, engine=engine,
             error=error,
+            runner_cache=runner_cache,
         )
 
     except subprocess.CalledProcessError as exc:
@@ -273,6 +315,7 @@ def execute_inside_container(
             image_ref=img, engine=engine,
             exit_code=exc.returncode,
             error=error,
+            runner_cache=runner_cache,
         )
 
     except RuntimeError as exc:
@@ -282,6 +325,7 @@ def execute_inside_container(
             runtime_version=manifest.runtime.version,
             image_ref=img or "", engine=engine,
             error=str(exc),
+            runner_cache=runner_cache,
         )
 
 
@@ -291,4 +335,5 @@ __all__ = [
     "_check_image",
     "_pull_image",
     "_find_engine",
+    "_prepare_runner_cache",
 ]

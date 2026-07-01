@@ -103,6 +103,7 @@ def cmd_compat_test(args):
         entrypoints=args.entrypoint,
         all_entrypoints=args.all_entrypoints,
         run_files=args.file,
+        runner_cache_dir=Path(args.runner_cache_dir) if args.runner_cache_dir else None,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result.get("success") else 9
@@ -156,6 +157,7 @@ def cmd_build(args):
         engine=args.engine,
         image_ref=base_image,
         timeout=args.build_timeout,
+        runner_cache_dir=Path(args.runner_cache_dir) if args.runner_cache_dir else None,
     )
 
     # Write build result to bundle metadata
@@ -215,6 +217,8 @@ def cmd_run(args):
         container_name=args.name,
         entrypoint=args.entrypoint,
         files=args.files,
+        runner_cache_dir=Path(args.runner_cache_dir) if args.runner_cache_dir else None,
+        require_runner=not args.dry_run,
     )
     if args.dry_run:
         print(json.dumps(plan, indent=2, sort_keys=True))
@@ -464,6 +468,8 @@ def build_parser():
                    help="Max seconds for container build (default: 600)")
     p.add_argument("--image-tag",
                    help="Optional OCI output tag (e.g. myapp:latest)")
+    p.add_argument("--runner-cache-dir",
+                   help="Runner cache directory for runtime.runner archives")
     p.set_defaults(func=cmd_build)
 
     # run
@@ -486,6 +492,8 @@ def build_parser():
     p.add_argument("--name", help="Optional container name")
     p.add_argument("--timeout", type=int, default=None,
                    help="Optional max seconds for the run process")
+    p.add_argument("--runner-cache-dir",
+                   help="Runner cache directory for runtime.runner archives")
     p.set_defaults(func=cmd_run)
 
     # image
@@ -602,6 +610,7 @@ def build_parser():
     cp.add_argument("--entrypoint", action="append", default=[], help="Suite entrypoint id to include in run-plan/run evidence; repeatable")
     cp.add_argument("--all-entrypoints", action="store_true", help="Collect run-plan/run evidence for every manifest entrypoint")
     cp.add_argument("--file", action="append", default=[], help="Host file to pass to selected entrypoint(s); repeatable")
+    cp.add_argument("--runner-cache-dir", help="Runner cache directory for runtime.runner archives")
     cp.set_defaults(func=cmd_compat_test)
 
     cp = csub.add_parser("corpus", help="Print the default curated compatibility corpus")

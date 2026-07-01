@@ -137,8 +137,8 @@ winforge providers
 
 # List/download/diagnose downloadable Wine runner archives
 winforge runners list
-winforge runners ensure pol-8.2
-winforge runners diagnose pol-8.2
+winforge runners ensure pol-8.2 --cache-dir "$HOME/winforge-runners"
+winforge runners diagnose pol-8.2 --cache-dir "$HOME/winforge-runners"
 ```
 
 ## Application Recipes
@@ -196,7 +196,7 @@ The initial `pol-*` aliases are Bottles-compatible labels for PlayOnLinux/Phoeni
 | `pol-4.3` | Wine 4.3 x86 | legacy 32-bit apps such as Office 2013/2016 evidence |
 | `pol-3.0.3` | Wine 3.0.3 x86 | fallback evidence path for Office 2007/2010 |
 
-Use `winforge runners ensure <alias>` to populate the local cache and `winforge runners diagnose <alias-or-path>` to detect missing host/runtime libraries such as the 32-bit ELF loader before attempting a real build/run.
+Use `winforge runners ensure <alias>` to populate the local cache and `winforge runners diagnose <alias-or-path>` to detect missing host/runtime libraries such as the 32-bit ELF loader before attempting a real build/run. Real `winforge build`, `winforge run`, and `winforge compat test --mode build|run` can mount a cached runner into the runtime container with `--runner-cache-dir`; the host may report `missing-elf-interpreter` while the container execution path still works because Wine runtime images install i386 support.
 
 ## Compatibility Policy
 
@@ -291,6 +291,7 @@ winforge compat test examples/notepad-plus-plus.winforge.yaml \
   --graphics headless \
   --engine docker \
   --mode build \
+  --runner-cache-dir "$HOME/winforge-runners" \
   --build-timeout 2400
 
 # Real build plus bounded app launch evidence
@@ -300,6 +301,7 @@ winforge compat test examples/notepad-plus-plus.winforge.yaml \
   --graphics headless \
   --engine docker \
   --mode run \
+  --runner-cache-dir "$HOME/winforge-runners" \
   --build-timeout 2400 \
   --run-timeout 60
 ```
@@ -353,7 +355,8 @@ inside the catalog runtime container.
 winforge run --dry-run --graphics headless dist/my-app-1.0.0
 
 # Headless execution through the runtime image's Xvfb entrypoint
-winforge run --graphics headless dist/my-app-1.0.0
+winforge run --graphics headless dist/my-app-1.0.0 \
+  --runner-cache-dir "$HOME/winforge-runners"
 
 # Visible execution with loopback-only VNC and noVNC/websockify ports
 winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/my-app-1.0.0
@@ -361,7 +364,11 @@ winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/my-app-1.0.0
 
 For v0, the bundle is mounted read-only at `/opt/winforge/bundle`; the prefix
 is copied to `/tmp/winforge-prefix` before launch so normal Wine runtime
-mutation does not alter the sealed bundle artifact.
+mutation does not alter the sealed bundle artifact. When bundle metadata includes
+`runtime.runner`, a populated runner cache is mounted read-only at
+`/opt/winforge-runner`, `WINFORGE_RUNNER_BIN=/opt/winforge-runner/bin` is exported,
+and that directory is prepended to `PATH` so the selected cached Wine runner is
+used inside the container.
 
 ## OCI Application Image Export
 
