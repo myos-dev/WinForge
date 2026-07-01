@@ -42,6 +42,8 @@ Strict YAML rules:
 
 `runtime.provider` must be one of `wine`, `staging`, or `umu-proton-ge`. `runtime.version` is required and may be either a pinned runner version or a catalog alias such as `latest`, `stable`, `previous`, `legacy`, or `baseline`. Provider/version are selected at build time and enforced at run time; changing providers should require rebuilding. For `umu-proton-ge`, the provider identifies the UMU-backed Proton-family stack while `runtime.version` selects or resolves to the GE-Proton runner tag. Resolved runtime metadata records both `requestedVersion` and `resolvedVersion`; future production artifacts should use the resolved image digest, not a mutable alias, as identity.
 
+`sources` records upstream/local source provenance. v0 source integrity verifies local `file://` and relative workspace paths plus declared `sha256` values; remote URLs are recorded but not fetched by the dependency-light verifier.
+
 `dependencies` supports build-time dependency installation. Allowed kinds: `winetricks`, `font`, `directx`, `package`, `runtime-component`.
 
 `install` supports build-time application installation. Allowed kinds: `msi`, `exe`, `portable`, `choco`, `script`. MSI/EXE/portable require `source`; script requires `command`.
@@ -83,6 +85,14 @@ compatibility:
 During build, WinForge exports the policy environment, applies `winecfg -v <windowsVersion>`, compiles `dllPolicy` into deterministic `WINEDLLOVERRIDES`, and installs `dxvk`/`vkd3d` prefix backends through winetricks when requested. During `run` and OCI app-image launch, WinForge re-exports the same compatibility environment from the embedded graph.
 
 Legacy `config.wine.arch`, `config.wine.windowsVersion`, `config.wine.dllOverrides`, `config.graphics`, and `config.env` normalize into the same policy, but explicit `compatibility` fields override legacy config.
+
+## Source integrity and compatibility evidence
+
+`winforge sources verify <manifest>` emits `schemaVersion: winforge.source-integrity/v0`. The report includes `valid`, `summary`, `items`, `errors`, and `warnings`. Each item records location (`sources[i]`, `install[i].source`, or `filesystem[i].source`), source reference, resolved local path when applicable, expected/actual sha256, and status (`verified`, `present`, `missing`, `hash-mismatch`, `remote`, etc.).
+
+`file://relative/path` and bare relative paths resolve against the selected workspace root. Real v0 builds mount the workspace at `/workspace`, and generated build scripts now resolve relative install/filesystem sources under that mount.
+
+`winforge compat test <manifest>` emits `schemaVersion: winforge.compat-test/v0`. It performs a dependency-light evidence pass: source integrity, dry-run bundle materialization, bundle verification, and run-plan generation. It does not execute Wine or container builds yet; real build/run evidence should build on this report format.
 
 ## Artifact model
 

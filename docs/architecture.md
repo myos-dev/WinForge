@@ -5,7 +5,7 @@ WinForge compiles application recipes into immutable application artifacts for W
 ## Component model
 
 ```text
-application recipe or CLI input -> core/manifest + core/compatibility -> runtime/providers -> builder/pipeline -> artifact/bundle -> artifact/index -> runtime/launcher -> artifact/oci -> artifact/kube
+application recipe or CLI input -> core/manifest + core/compatibility + core/sources -> compat/evidence -> runtime/providers -> builder/pipeline -> artifact/bundle -> artifact/index -> runtime/launcher -> artifact/oci -> artifact/kube
 ```
 
 ## Design decisions
@@ -46,23 +46,29 @@ The deterministic pipeline is `init-prefix`, `install-dependencies`, `install-ap
 
 This layer intentionally avoids raw loader-order and trace-control schema. Those stay debug/research-only until hard app failures justify them.
 
-### 6. Execution graph
+### 6. Source integrity and compatibility evidence
+
+`core/sources.py` verifies local source presence and sha256 values before real Wine work. It emits `winforge.source-integrity/v0`, resolving `file://` and relative paths against the workspace root used by the build container.
+
+`compat/evidence.py` emits `winforge.compat-test/v0`: source integrity, dry-run bundle creation, bundle verification, and run-plan evidence. It is intentionally dependency-light and does not execute Wine yet. This creates a stable evidence envelope for real app compatibility testing without making early failures depend on container availability.
+
+### 7. Execution graph
 
 `metadata/graph.json` is first-class build/provenance output. It records runtime image selection, artifact identity, launch contract, graphics modes, build phase order, and exact-runtime compatibility and requested compatibility policy. It should not become a general runtime scheduler; runtime execution should verify the artifact, prepare state, start display services if requested, and launch the application contract.
 
-### 7. Bundle inspection and verification
+### 8. Bundle inspection and verification
 
 `winforge bundle inspect` and `winforge bundle verify` form the validation layer between bundle creation and future `winforge run`. Verification consumes the bundle's manifest, runtime binding, launch contract, provenance, build plan, and `metadata/graph.json` without requiring container execution.
 
-### 8. Local artifact index
+### 9. Local artifact index
 
 `artifact/index.py` maintains the local `winforge.artifact-index/v0` cache at `dist/.winforge/artifacts.json` by default. `winforge build` registers verified bundles by app name and version. `winforge artifacts list` and `winforge artifacts resolve <name[@version]>` expose the index, and `winforge run` / `winforge export oci` accept either direct bundle paths or app references.
 
-### 9. Run planning and execution
+### 10. Run planning and execution
 
 `runtime/launcher.py` implements the current `winforge run` path. It consumes verified bundle output, emits `winforge.run-plan/v0` for dry runs, and executes the plan with Podman/Docker when not in dry-run mode. Headless mode uses Xvfb without host ports; VNC mode exposes loopback-only VNC/noVNC ports and starts `x11vnc` plus `websockify` inside the runtime container. Bundles are mounted read-only and prefixes are copied before launch so runtime mutation affects state, not the sealed artifact.
 
-### 10. OCI application export
+### 11. OCI application export
 
 `artifact/oci.py` implements `winforge export oci`. It consumes a verified bundle, emits `winforge.oci-export-plan/v0` in dry-run mode, stages a build context with a copied bundle plus `metadata/artifact.json`, generates a runnable app `Containerfile`, and builds with Podman/Docker when not in dry-run mode.
 
@@ -70,7 +76,7 @@ Exported images are based on the graph-resolved runtime image and embed the bund
 
 When `--push` is used, export records repo digest identity from image inspection. `winforge image verify` then compares OCI labels to embedded `metadata/artifact.json` so registry/scheduler-visible labels cannot silently drift from WinForge artifact semantics.
 
-### 11. Kubernetes manifest export
+### 12. Kubernetes manifest export
 
 `artifact/kube.py` implements `winforge export kube`. It consumes a verified bundle or app-name reference and emits `winforge.kube-export/v0` plus Kubernetes YAML. The emitter requires digest-pinned image refs by default and creates a Deployment plus state/export PVCs unless `--no-pvc` is set. Labels are normalized for Kubernetes selectors, while exact WinForge artifact metadata is preserved in annotations.
 

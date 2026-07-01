@@ -33,7 +33,9 @@ from container.manager import (
     list_definitions,
     get_image_ref,
 )
+from compat.evidence import run_compat_test
 from core.manifest import ManifestError, RuntimeSpec, load_manifest
+from core.sources import verify_manifest_sources
 from runtime.providers import list_providers, resolve_runtime
 from runtime.launcher import RunError, build_run_plan, execute_run_plan
 
@@ -71,6 +73,26 @@ def cmd_plan(args):
     }
     print(json.dumps(result, indent=2))
     return 0
+
+
+def cmd_sources_verify(args):
+    manifest = load_manifest(Path(args.manifest))
+    workspace = Path(args.workspace) if args.workspace else Path.cwd()
+    result = verify_manifest_sources(manifest, workspace=workspace)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result.get("valid") else 8
+
+
+def cmd_compat_test(args):
+    result = run_compat_test(
+        Path(args.manifest),
+        output_dir=Path(args.output),
+        workspace=Path(args.workspace) if args.workspace else Path.cwd(),
+        graphics=args.graphics,
+        engine=args.engine,
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result.get("success") else 9
 
 
 def cmd_build(args):
@@ -456,6 +478,27 @@ def build_parser():
     ap.add_argument("--index", default=None,
                     help="Artifact index path (default: dist/.winforge/artifacts.json)")
     ap.set_defaults(func=cmd_artifacts_resolve)
+
+    # sources
+    p = sub.add_parser("sources", help="Verify recipe source files and hashes")
+    ssub = p.add_subparsers(dest="sources_command", required=True)
+
+    sp = ssub.add_parser("verify", help="Verify local recipe sources and sha256 values")
+    sp.add_argument("manifest", help="Path to WinForge manifest")
+    sp.add_argument("--workspace", help="Workspace root for relative local sources (default: cwd)")
+    sp.set_defaults(func=cmd_sources_verify)
+
+    # compatibility evidence
+    p = sub.add_parser("compat", help="Collect compatibility evidence for a recipe")
+    csub = p.add_subparsers(dest="compat_command", required=True)
+
+    cp = csub.add_parser("test", help="Run source/build/verify/run-plan compatibility evidence pass")
+    cp.add_argument("manifest", help="Path to WinForge manifest")
+    cp.add_argument("--workspace", help="Workspace root for relative local sources (default: cwd)")
+    cp.add_argument("--output", default="dist", help="Output directory for the dry-run bundle")
+    cp.add_argument("--graphics", choices=["headless", "vnc"], default="headless", help="Graphics mode for run-plan evidence")
+    cp.add_argument("--engine", default=None, help="Container engine name to record in run-plan evidence")
+    cp.set_defaults(func=cmd_compat_test)
 
     # export
     p = sub.add_parser("export", help="Export WinForge bundles to deployable artifacts")

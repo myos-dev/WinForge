@@ -198,6 +198,30 @@ WinForge normalizes this to `winforge.compatibility-policy/v0`, records it in bu
 
 This is intentionally a high-level policy layer. Explicit loader ordering, COM timing controls, and trace/debug knobs are not primary schema.
 
+## Source Integrity and Compatibility Evidence
+
+Before spending time in Wine, verify that recipe sources are actually present and hash-correct:
+
+```bash
+winforge sources verify examples/notepad-plus-plus.winforge.yaml --workspace .
+```
+
+The output is `schemaVersion: winforge.source-integrity/v0` and reports every declared source, install source, filesystem overlay, resolved local path, sha256 result, warning, and error. v0 builds consume local workspace files; remote URLs are recorded as provenance but must be materialized locally for install/filesystem steps.
+
+For a dependency-light compatibility evidence pass:
+
+```bash
+winforge compat test examples/notepad-plus-plus.winforge.yaml \
+  --workspace . \
+  --output dist \
+  --graphics headless \
+  --engine docker
+```
+
+The output is `schemaVersion: winforge.compat-test/v0` and includes source integrity, dry-run bundle creation, bundle verification, and a `winforge.run-plan/v0` launch plan carrying runtime and compatibility policy. This command does not execute Wine yet; it creates an evidence report that makes missing sources, hash drift, graph problems, and launch-policy drift visible before real app testing.
+
+The bundled Notepad++ recipe remains a contract fixture until `sources/notepad-plus-plus.exe` and `overlays/notepad-plus-plus/config.xml` are provided. `sources verify` / `compat test` should report that clearly instead of failing later inside Wine.
+
 ## Local Artifact Index
 
 `winforge build` registers materialized bundles in a local artifact index at:

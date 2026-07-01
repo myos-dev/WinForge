@@ -33,7 +33,7 @@ winforge = "winforge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["winforge*", "artifact*", "builder*", "container*", "core*", "runtime*"]
+include = ["winforge*", "artifact*", "builder*", "compat*", "container*", "core*", "runtime*"]
 exclude = ["tests*", "docs*", "examples*", "cmd*"]
 namespaces = false
 

@@ -6,6 +6,7 @@ WinForge Wine/Proton OCI container.
 from __future__ import annotations
 import json, shlex
 from core.compatibility import compatibility_environment
+from core.sources import container_source_path
 from core.manifest import Manifest
 
 PHASE_ORDER = [
@@ -220,14 +221,7 @@ def generate_build_script(
 
     for fm in manifest.filesystem:
         source = fm.source
-        # Strip file:// prefix if present
-        if source.startswith("file://"):
-            source = source[len("file://"):]
-        # Resolve relative paths against workspace_mount
-        if source.startswith("./") or source.startswith("../"):
-            abs_source = f"{workspace_mount}/{source}"
-        else:
-            abs_source = source
+        abs_source = container_source_path(source, workspace_mount=workspace_mount)
 
         # Convert Windows path target to Wine drive_c path
         target = fm.target.replace("C:/", "C:/").replace("\\", "/")
@@ -257,12 +251,7 @@ def generate_build_script(
 
     for step in manifest.install:
         source = step.source or ""
-        if source.startswith("file://"):
-            source = source[len("file://"):]
-        if source.startswith("./") or source.startswith("../"):
-            abs_source = f"{workspace_mount}/{source}"
-        else:
-            abs_source = source
+        abs_source = container_source_path(source, workspace_mount=workspace_mount) if source else ""
 
         if step.kind in ("exe", "msi"):
             quiet_args = "/quiet" if step.kind == "msi" else "/S"
