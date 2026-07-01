@@ -1,6 +1,7 @@
 """Tests for Phase 6G cached runner execution wiring."""
 from __future__ import annotations
 
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -56,7 +57,7 @@ class RunnerExecutionBuildTests(unittest.TestCase):
                 "diagnostic": {"status": "missing-elf-interpreter"},
             }
             with patch("builder.executor.ensure_runner", return_value=ensure_result) as ensure_runner:
-                with patch("builder.executor.subprocess.run", return_value=Completed()) as run:
+                with patch("builder.executor._run_container_command", return_value=Completed()) as run, patch("sys.stderr", io.StringIO()):
                     result = execute_inside_container(
                         manifest,
                         bundle,

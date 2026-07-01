@@ -1,6 +1,6 @@
 """Tests for the WinForge container executor and build-script generator."""
 from __future__ import annotations
-import json, os, stat, tempfile, unittest
+import io, json, os, stat, tempfile, unittest
 from unittest.mock import patch
 from pathlib import Path
 
@@ -13,6 +13,7 @@ from builder.executor import (
     _pull_image,
     _resolve_image_ref,
     execute_inside_container,
+    _run_container_command,
 )
 from core.manifest import load_manifest
 
@@ -135,7 +136,7 @@ class ContainerExecutionCommandTests(unittest.TestCase):
                 stdout = "container ok"
                 stderr = ""
 
-            with patch("builder.executor.subprocess.run", return_value=Completed()) as run:
+            with patch("builder.executor._run_container_command", return_value=Completed()) as run, patch("sys.stderr", io.StringIO()):
                 result = execute_inside_container(
                     manifest,
                     bundle,
@@ -165,7 +166,7 @@ class ContainerExecutionCommandTests(unittest.TestCase):
                 stdout = "container ok"
                 stderr = ""
 
-            with patch("builder.executor.subprocess.run", return_value=Completed()) as run:
+            with patch("builder.executor._run_container_command", return_value=Completed()) as run, patch("sys.stderr", io.StringIO()):
                 execute_inside_container(
                     manifest,
                     bundle,
@@ -194,7 +195,7 @@ class ContainerExecutionCommandTests(unittest.TestCase):
                 stdout = "container ok"
                 stderr = ""
 
-            with patch("builder.executor.subprocess.run", return_value=Completed()) as run:
+            with patch("builder.executor._run_container_command", return_value=Completed()) as run, patch("sys.stderr", io.StringIO()):
                 execute_inside_container(
                     manifest,
                     bundle,
@@ -208,6 +209,23 @@ class ContainerExecutionCommandTests(unittest.TestCase):
         self.assertIn(f"{bundle.resolve()}:/opt/winforge", argv)
         self.assertIn(f"{workspace.resolve()}:/workspace:ro", argv)
         self.assertNotIn(f"{bundle.resolve()}:/opt/winforge:z", argv)
+
+    def test_run_container_command_streams_output_to_stderr_and_returns_log_text(self):
+        import io
+        import sys
+
+        stderr = io.StringIO()
+        with patch("sys.stderr", stderr):
+            result = _run_container_command(
+                [sys.executable, "-c", "print('[winforge] Phase 1/6: Initializing Wine prefix'); print('container still working')"],
+                timeout=5,
+            )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("[winforge] Phase 1/6: Initializing Wine prefix", stderr.getvalue())
+        self.assertIn("container still working", stderr.getvalue())
+        self.assertIn("[winforge] Phase 1/6: Initializing Wine prefix", result.stdout)
+        self.assertIn("container still working", result.stdout)
 
 
 class BuildResultTests(unittest.TestCase):

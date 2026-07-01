@@ -173,6 +173,12 @@ When a manifest is resolved, `RuntimeBinding.oci_image` contains the published G
 
 The `plan` and `build` CLI commands automatically resolve the catalog-backed OCI image reference and include it in their output. `build` also writes `metadata/graph.json` so later `run`/OCI/kube commands can consume the resolved runtime and launch contract without reinterpreting the manifest. `winforge run` consumes that graph, verifies exact runtime consistency, mounts the bundle read-only, copies the prefix to an ephemeral runtime prefix, and launches through the catalog-resolved runtime image.
 
+For real builds, WinForge streams container output to stderr as it arrives and
+persists the same output to `logs/build.log`. Stdout remains reserved for
+machine-readable command results such as `winforge compat test` JSON, so shell
+pipelines like `| tee result.json` stay valid while the operator still sees
+long-running Wine/winetricks/installer progress.
+
 `winforge export oci` also consumes the graph. It uses `runnerRuntime.image` as the application image base, writes `metadata/artifact.json` into a staged bundle copy, adds `winforge-app-launch`, and builds a runnable image whose mutable paths are `/var/lib/winforge/state` and `/exports`.
 
 ## Consumption by VIC (future)

@@ -5,8 +5,8 @@ container, producing a real built prefix with installed dependencies
 and applications.
 """
 from __future__ import annotations
-import json, os, shutil, subprocess, sys
-from dataclasses import dataclass, field
+import json, os, queue, shutil, subprocess, sys, threading, time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +14,68 @@ from builder.pipeline import generate_build_script
 from core.manifest import Manifest
 from runtime.providers import resolve_runtime
 from runtime.runner_cache import ensure_runner
+
+
+@dataclass
+class _CommandResult:
+    returncode: int
+    stdout: str
+    stderr: str = ""
+
+
+def _run_container_command(cmd: list[str], *, timeout: int) -> _CommandResult:
+    """Run a container command while streaming combined output to stderr.
+
+    The CLI's stdout is reserved for machine-readable JSON. Progress therefore
+    streams to stderr and is also returned so the caller can persist build.log.
+    """
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    if proc.stdout is None:
+        raise RuntimeError("container process did not expose stdout")
+
+    lines: list[str] = []
+    output_queue: queue.Queue[str | None] = queue.Queue()
+
+    def _reader() -> None:
+        try:
+            for line in proc.stdout:
+                output_queue.put(line)
+        finally:
+            output_queue.put(None)
+
+    reader = threading.Thread(target=_reader, daemon=True)
+    reader.start()
+
+    deadline = time.monotonic() + timeout
+    stream_done = False
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            proc.kill()
+            output = "".join(lines)
+            raise subprocess.TimeoutExpired(cmd, timeout, output=output)
+
+        try:
+            item = output_queue.get(timeout=min(0.2, remaining))
+        except queue.Empty:
+            item = "__WINFORGE_NO_OUTPUT__"
+
+        if item is None:
+            stream_done = True
+        elif item != "__WINFORGE_NO_OUTPUT__":
+            lines.append(item)
+            print(item, end="", file=sys.stderr, flush=True)
+
+        if stream_done and proc.poll() is not None:
+            break
+
+    return _CommandResult(proc.returncode or 0, "".join(lines), "")
 
 
 @dataclass
@@ -245,10 +307,9 @@ def execute_inside_container(
     log_lines.append("")
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True, text=True, timeout=timeout,
-        )
+        for line in log_lines:
+            print(line, file=sys.stderr, flush=True)
+        result = _run_container_command(cmd, timeout=timeout)
         log_lines.append(result.stdout or "")
         if result.stderr:
             log_lines.append("--- stderr ---")
@@ -308,7 +369,10 @@ def execute_inside_container(
             runner_cache=runner_cache,
         )
 
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        if exc.output:
+            output = exc.output.decode("utf-8", errors="replace") if isinstance(exc.output, bytes) else str(exc.output)
+            log_lines.append(output)
         error = f"Build timed out after {timeout}s."
         log_lines.append(error)
         (bundle_path / "logs" / "build.log").write_text("\n".join(log_lines), encoding="utf-8")
@@ -354,4 +418,5 @@ __all__ = [
     "_pull_image",
     "_find_engine",
     "_prepare_runner_cache",
+    "_run_container_command",
 ]
