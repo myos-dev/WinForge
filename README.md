@@ -110,6 +110,18 @@ winforge build examples/minimal.winforge.json --dry-run
 winforge bundle inspect dist/notepad-plus-plus-8.6.0
 winforge bundle verify dist/notepad-plus-plus-8.6.0
 
+# Locate/reuse prepared-prefix checkpoints for slow legacy installer debugging
+winforge debug checkpoint inspect dist/office-prep-output
+winforge debug checkpoint resume dist/office-prep-output \
+  --output dist/attempts \
+  --name office-install-attempt-001
+winforge compat test examples/notepad-plus-plus.winforge.yaml \
+  --mode build \
+  --stop-before install-apps
+winforge compat test examples/notepad-plus-plus.winforge.yaml \
+  --mode build \
+  --resume-from-bundle dist/attempts/office-install-attempt-001
+
 # Resolve built application artifacts by name from the local index
 winforge artifacts list
 winforge artifacts resolve notepad-plus-plus

@@ -156,6 +156,10 @@ If a bundle graph contains `runnerRuntime.runner`, `winforge run --runner-cache-
 
 `winforge compat test <manifest>` emits `schemaVersion: winforge.compat-test/v0`. It supports `--mode dry-run`, `--mode build`, and `--mode run`. Dry-run mode records source integrity, dry-run bundle materialization, bundle verification, and run-plan generation. Build mode performs the real container build after source integrity passes and records `metadata/execution-result.json` plus structured build evidence. Run mode adds bounded `winforge.run-result/v0` launch evidence.
 
+`winforge compat test <manifest> --mode build --stop-before install-apps` runs dependency/prefix preparation, seals a checkpoint before application installers, and records the checkpoint in normal build evidence. `--resume-from-bundle <path>` accepts either a bundle root or a compat-output parent, locates the prepared checkpoint, seeds its `prefix/` into a fresh attempt bundle, and records `checkpoint.sourceBundle` plus `checkpoint.attemptBundle` in the evidence payload. `--stop-before` is intentionally limited to build/dry-run modes; run mode requires a full application bundle.
+
+`winforge debug checkpoint inspect <path>` emits `schemaVersion: winforge.checkpoint/v0` and validates a prepared-prefix checkpoint. A checkpoint is valid only when it has `prefix/drive_c`, `manifest.winforge.json`, `runtime/runtime.json`, `metadata/provenance.json`, and `logs/build.log`. If `<path>` is a compat-test output parent, inspection locates a single nested valid bundle and reports that actual bundle root. `winforge debug checkpoint resume <path> --output <dir> [--name <id>]` copies the checkpoint bundle into a fresh mutable attempt directory and writes `metadata/checkpoint-resume.json` without mutating the source checkpoint.
+
 `winforge compat corpus` emits `schemaVersion: winforge.compat-corpus/v0`, a packaged seed app corpus with tiers, statuses, source policies, and compatibility focus tags. The corpus is not an automatic compatibility database; it is the starter list for repeatable evidence collection.
 
 ## Artifact model

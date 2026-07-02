@@ -4,7 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from artifact.bundle import create_bundle
+from artifact.bundle import bundle_path_for, create_bundle
+from artifact.checkpoint import CheckpointError, inspect_checkpoint, seed_bundle_from_checkpoint
 from artifact.index import default_index_path, register_bundle
 from artifact.inspection import verify_bundle
 from builder.executor import execute_inside_container
@@ -36,6 +37,8 @@ def run_compat_test(
     all_entrypoints: bool = False,
     run_files: list[Path | str] | None = None,
     runner_cache_dir: Path | str | None = None,
+    resume_from_bundle: Path | str | None = None,
+    stop_before: str | None = None,
 ) -> dict[str, Any]:
     """Run a compatibility evidence pass.
 
@@ -46,6 +49,10 @@ def run_compat_test(
     """
     if mode not in {"dry-run", "build", "run"}:
         raise ValueError("mode must be one of: dry-run, build, run")
+    if stop_before not in {None, "install-apps"}:
+        raise ValueError("stop_before must be one of: install-apps")
+    if stop_before and mode == "run":
+        raise ValueError("stop_before is only supported with dry-run or build mode")
 
     manifest_file = Path(manifest_path)
     workspace_path = Path(workspace or Path.cwd()).resolve()
@@ -80,13 +87,36 @@ def run_compat_test(
         "runPlans": [],
         "entrypointEvidence": [],
         "run": {"attempted": False, "reason": f"mode={mode}"},
+        "checkpoint": {
+            "resumed": False,
+            "resumeFromBundle": str(resume_from_bundle) if resume_from_bundle else None,
+            "stopBefore": stop_before,
+        },
         "success": False,
         "classification": "not-run",
     }
 
     try:
+        resolved_resume_bundle = None
+        if resume_from_bundle:
+            resume_inspection = inspect_checkpoint(resume_from_bundle)
+            if not resume_inspection.get("valid"):
+                raise CheckpointError(
+                    "invalid resume checkpoint: " + "; ".join(resume_inspection.get("errors") or [])
+                )
+            resolved_resume_bundle = Path(str(resume_inspection["bundle"]))
+
+        prospective_bundle = bundle_path_for(manifest, output_path)
+        if resolved_resume_bundle:
+            _reject_symlinked_existing_components(output_path, label="output path")
+            _reject_attempt_overlaps_resume_source(resolved_resume_bundle, prospective_bundle)
         bundle = create_bundle(manifest, output_path, dry_run=(mode == "dry-run"))
         artifact_entry = None
+        if resolved_resume_bundle:
+            checkpoint_resume = seed_bundle_from_checkpoint(resolved_resume_bundle, bundle)
+            checkpoint_resume["resumed"] = True
+            checkpoint_resume["stopBefore"] = stop_before
+            payload["checkpoint"] = checkpoint_resume
 
         if mode == "dry-run":
             artifact_entry = register_bundle(bundle, index_path=default_index_path(output_path))
@@ -136,6 +166,8 @@ def run_compat_test(
         }
         if manifest.runtime.runner or runner_cache_dir is not None:
             build_kwargs["runner_cache_dir"] = runner_cache_dir
+        if stop_before:
+            build_kwargs["stop_before"] = stop_before
         build_result = execute_inside_container(manifest, bundle, **build_kwargs)
         execution = build_result.to_dict()
         (bundle / "metadata" / "execution-result.json").write_text(
@@ -153,6 +185,7 @@ def run_compat_test(
             "artifactIndex": artifact_entry["indexPath"] if artifact_entry else str(default_index_path(output_path)),
             "artifact": artifact_entry,
             "execution": execution,
+            "stopBefore": stop_before,
         }
         payload["bundleVerification"] = verification
         run_plans = _build_run_plans(
@@ -178,7 +211,7 @@ def run_compat_test(
             return payload
         if mode == "build":
             payload["success"] = True
-            payload["classification"] = "build-passed"
+            payload["classification"] = "checkpoint-prepared" if stop_before else "build-passed"
             return payload
 
         run_results = []
@@ -262,3 +295,30 @@ def _entrypoint_evidence_from_plans(
             item["run"] = results[index]
         evidence.append(item)
     return evidence
+
+
+def _reject_attempt_overlaps_resume_source(source_bundle: Path, attempt_bundle: Path) -> None:
+    source = source_bundle.resolve()
+    attempt = attempt_bundle.resolve(strict=False)
+    try:
+        attempt.relative_to(source)
+    except ValueError:
+        pass
+    else:
+        raise CheckpointError(f"compat attempt bundle would be created inside the resume checkpoint: {attempt}")
+    try:
+        source.relative_to(attempt)
+    except ValueError:
+        pass
+    else:
+        raise CheckpointError(f"compat attempt bundle would contain the resume checkpoint: {attempt}")
+
+
+def _reject_symlinked_existing_components(path: Path, *, label: str) -> None:
+    candidates = [path, *path.parents]
+    for candidate in candidates:
+        if candidate.exists() or candidate.is_symlink():
+            if candidate.is_symlink():
+                raise CheckpointError(f"{label} must not contain symlink components: {candidate}")
+            if not candidate.is_dir():
+                raise CheckpointError(f"{label} must not contain non-directory components: {candidate}")

@@ -205,6 +205,7 @@ def generate_build_script(
     bundle_mount: str = "/opt/winforge",
     workspace_mount: str = "/workspace",
     timeout_per_phase: int = 300,
+    stop_before: str | None = None,
 ) -> str:
     """Produce a bash script that runs the build inside a WinForge Wine container.
 
@@ -212,6 +213,8 @@ def generate_build_script(
     the virtual X display.  It writes its output into *bundle_mount* (which
     corresponds to the host bundle directory via ``--volume``).
     """
+    if stop_before not in {None, "install-apps"}:
+        raise ValueError("stop_before must be one of: install-apps")
     prefix = "$WINEPREFIX"
     indent = "  "
 
@@ -219,7 +222,7 @@ def generate_build_script(
         "#!/bin/bash",
         'set -euo pipefail',
         "",
-        f'echo "[winforge] Starting real build for {manifest.name} v{manifest.version}"',
+        r"printf '[winforge] Starting real build for %s v%s\n' " + _shell_quote(manifest.name) + " " + _shell_quote(manifest.version),
         f'echo "[winforge] Prefix: {prefix}"',
         f'echo "[winforge] Bundle mount: {bundle_mount}"',
         f'echo "[winforge] Workspace mount: {workspace_mount}"',
@@ -269,6 +272,48 @@ def generate_build_script(
 
     lines.append("echo ''")
     lines.append("")
+
+    if stop_before == "install-apps":
+        prefix_filelist = (
+            f"find \"{prefix}/drive_c\" -maxdepth 4 -type f 2>/dev/null | "
+            f"awk 'NR <= 100 {{ print }}' > \"{bundle_mount}/logs/prefix-filelist.txt\""
+        )
+        result_path = f"{bundle_mount}/metadata/build-result.json"
+        manifest_name_json = _shell_quote(json.dumps(manifest.name))
+        manifest_version_json = _shell_quote(json.dumps(manifest.version))
+        runtime_provider_json = _shell_quote(json.dumps(manifest.runtime.provider))
+        runtime_version_json = _shell_quote(json.dumps(manifest.runtime.version))
+        printf_lines = [
+            "  printf '{\n'",
+            "  printf '  " + '"build": "checkpoint",' + "\n'",
+            "  printf '  " + '"manifestName": %s,' + "\n' " + manifest_name_json,
+            "  printf '  " + '"manifestVersion": %s,' + "\n' " + manifest_version_json,
+            "  printf '  " + '"runtimeProvider": %s,' + "\n' " + runtime_provider_json,
+            "  printf '  " + '"runtimeVersion": %s,' + "\n' " + runtime_version_json,
+            "  printf '  " + '"stoppedBefore": "install-apps",' + "\n'",
+            "  printf '  " + '"prefixSize": %s,' + "\\n' " + '"$prefix_size"',
+            "  printf '  " + '"prefixFileCount": %s,' + "\\n' " + '"$prefix_file_count"',
+            "  printf '  " + '"buildTool": "winforge",' + "\n'",
+            "  printf '  " + '"buildTimestamp": %s' + "\\n' " + '"\\"$build_timestamp\\""',
+            "  printf '}\n'",
+        ]
+        lines.extend([
+            'echo "[winforge] Stop requested before phase: install-apps"',
+            'echo "[winforge]   Prepared prefix checkpoint will be sealed without running application installers"',
+            prefix_filelist,
+            f'du -sh "{prefix}" > "{bundle_mount}/logs/prefix-size.txt"',
+            f'prefix_size=$(du -sb "{prefix}" 2>/dev/null | cut -f1 || echo 0)',
+            f'prefix_file_count=$(find "{prefix}/drive_c" -type f 2>/dev/null | wc -l)',
+            'build_timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)',
+            f'build_result_path={_shell_quote(result_path)}',
+            '{',
+            *printf_lines,
+            '} > "$build_result_path"',
+            'echo "[winforge] === CHECKPOINT COMPLETE ==="',
+            f'echo "[winforge] Bundle at {bundle_mount}"',
+            "exit 0",
+        ])
+        return "\n".join(lines)
 
     # ------------------------------------------------------------------
     # Phase 3: apply-layout-and-registry (filesystem mappings)
@@ -406,10 +451,10 @@ def generate_build_script(
     )
     lines.append("{")
     lines.append('  "build": "complete",')
-    lines.append(f'  "manifestName": "{manifest.name}",')
-    lines.append(f'  "manifestVersion": "{manifest.version}",')
-    lines.append(f'  "runtimeProvider": "{manifest.runtime.provider}",')
-    lines.append(f'  "runtimeVersion": "{manifest.runtime.version}",')
+    lines.append(f'  "manifestName": {json.dumps(manifest.name)},')
+    lines.append(f'  "manifestVersion": {json.dumps(manifest.version)},')
+    lines.append(f'  "runtimeProvider": {json.dumps(manifest.runtime.provider)},')
+    lines.append(f'  "runtimeVersion": {json.dumps(manifest.runtime.version)},')
     lines.append('  "dependencies": [')
     for i, d in enumerate(manifest.dependencies):
         comma = "," if i < len(manifest.dependencies) - 1 else ""

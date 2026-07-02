@@ -72,24 +72,27 @@ Acceptance criteria:
 
 ### Slice 3: prepared-prefix checkpoint inspection and resume
 
+Status: implemented in initial v0 on `hermes-0.1/legacy-installer-followup`.
+
 Goal: make slow dependency/prefix prep reusable without manual path hunting.
 
-Candidate CLI:
+Implemented CLI:
 
 ```bash
-winforge bundle inspect <bundle>
 winforge debug checkpoint inspect <path>
-winforge compat test <recipe> --stop-before install-apps
-winforge compat test <recipe> --resume-from-bundle <bundle>
+winforge debug checkpoint resume <path> --output <dir> [--name <id>]
+winforge compat test <recipe> --mode build --stop-before install-apps
+winforge compat test <recipe> --mode build --resume-from-bundle <bundle-or-output-parent>
 ```
 
-Likely files:
+Touched files:
 
-- `artifact/inspection.py`
+- `artifact/checkpoint.py`
 - `compat/evidence.py`
 - `builder/executor.py`
 - `builder/pipeline.py`
 - `winforge/cli.py`
+- `tests/test_checkpoint_resume.py`
 
 Acceptance criteria:
 
@@ -97,7 +100,7 @@ Acceptance criteria:
 - A checkpoint is valid only when `prefix/drive_c`, manifest/runtime metadata, and logs/provenance are present.
 - Resume copies the checkpoint into a fresh attempt directory before mutation.
 - Compat evidence records the source checkpoint path and the new attempt path.
-- Tests cover valid nested bundle, invalid parent directory, missing prefix, and immutable-source copy behavior.
+- Tests cover valid nested bundle, invalid parent directory, missing prefix, immutable-source copy behavior, CLI inspect/resume, compat resume evidence, and stop-before build-script generation.
 
 ### Slice 4: visible installer debug command
 

@@ -5,6 +5,7 @@ import argparse, json, sys
 from pathlib import Path
 
 from artifact.bundle import create_bundle
+from artifact.checkpoint import CheckpointError, inspect_checkpoint, resume_checkpoint
 from artifact.oci import (
     OCIExportError,
     build_oci_image,
@@ -112,12 +113,33 @@ def cmd_media_stage(args):
 
 
 
+
+def cmd_debug_checkpoint_inspect(args):
+    result = inspect_checkpoint(Path(args.path))
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result.get("valid") else 13
+
+
+def cmd_debug_checkpoint_resume(args):
+    result = resume_checkpoint(
+        Path(args.path),
+        output_dir=Path(args.output),
+        name=args.name,
+        overwrite=args.overwrite,
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
 def cmd_failure_analyze(args):
     result = analyze_failure_path(Path(args.path), write=not args.no_write)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
 def cmd_compat_test(args):
+    if args.stop_before and args.mode == "run":
+        print("winforge: compat error: --stop-before is only supported with --mode dry-run or --mode build", file=sys.stderr)
+        return 2
     result = run_compat_test(
         Path(args.manifest),
         output_dir=Path(args.output),
@@ -131,6 +153,8 @@ def cmd_compat_test(args):
         all_entrypoints=args.all_entrypoints,
         run_files=args.file,
         runner_cache_dir=Path(args.runner_cache_dir) if args.runner_cache_dir else None,
+        resume_from_bundle=Path(args.resume_from_bundle) if args.resume_from_bundle else None,
+        stop_before=args.stop_before,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result.get("success") else 9
@@ -639,6 +663,25 @@ def build_parser():
     mp.add_argument("--overwrite", action="store_true", help="Replace an existing staged media directory")
     mp.set_defaults(func=cmd_media_stage)
 
+
+    # debug helpers
+    p = sub.add_parser("debug", help="Debug WinForge bundles and installer workflows")
+    dsub = p.add_subparsers(dest="debug_command", required=True)
+
+    dp = dsub.add_parser("checkpoint", help="Inspect or resume prepared-prefix checkpoints")
+    cpsub = dp.add_subparsers(dest="checkpoint_command", required=True)
+
+    cp = cpsub.add_parser("inspect", help="Locate and validate a checkpoint bundle or output parent")
+    cp.add_argument("path", help="Checkpoint bundle path or compat-test output parent")
+    cp.set_defaults(func=cmd_debug_checkpoint_inspect)
+
+    cp = cpsub.add_parser("resume", help="Copy a checkpoint bundle into a fresh mutable attempt directory")
+    cp.add_argument("path", help="Checkpoint bundle path or compat-test output parent")
+    cp.add_argument("--output", required=True, help="Directory where the fresh attempt bundle will be copied")
+    cp.add_argument("--name", help="Attempt bundle directory name")
+    cp.add_argument("--overwrite", action="store_true", help="Replace an existing attempt bundle")
+    cp.set_defaults(func=cmd_debug_checkpoint_resume)
+
     # failure analysis
     p = sub.add_parser("failure", help="Analyze Windows/Wine installer failure logs")
     fsub = p.add_subparsers(dest="failure_command", required=True)
@@ -665,6 +708,8 @@ def build_parser():
     cp.add_argument("--all-entrypoints", action="store_true", help="Collect run-plan/run evidence for every manifest entrypoint")
     cp.add_argument("--file", action="append", default=[], help="Host file to pass to selected entrypoint(s); repeatable")
     cp.add_argument("--runner-cache-dir", help="Runner cache directory for runtime.runner archives")
+    cp.add_argument("--resume-from-bundle", help="Prepared checkpoint bundle or output parent to seed into the new attempt")
+    cp.add_argument("--stop-before", choices=["install-apps"], help="Stop real build before the selected phase and seal a checkpoint")
     cp.set_defaults(func=cmd_compat_test)
 
     cp = csub.add_parser("corpus", help="Print the default curated compatibility corpus")
@@ -741,6 +786,9 @@ def main(argv=None):
     except FailureAnalysisError as exc:
         print(f"winforge: failure-analysis error: {exc}", file=sys.stderr)
         return 12
+    except CheckpointError as exc:
+        print(f"winforge: checkpoint error: {exc}", file=sys.stderr)
+        return 13
     except ArtifactIndexError as exc:
         print(f"winforge: artifact index error: {exc}", file=sys.stderr)
         return 6
