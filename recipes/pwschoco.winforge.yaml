@@ -1,0 +1,20 @@
+schemaVersion: winforge.app/v0
+name: pwschoco
+version: "1.0.0"
+
+runtime:
+  provider: wine
+  version: latest
+
+modules:
+  - type: chocolatey
+    install:
+      packages:
+        - 7zip.install
+
+# 7-Zip File Manager works great under Wine (native Win32 app)
+launch:
+  entrypoint: C:/Program Files/7-Zip/7zFM.exe
+
+state:
+  persistence: persistent

@@ -1,0 +1,34 @@
+schemaVersion: winforge.app/v0
+name: notepadplusplus
+version: "1.0.0"
+
+runtime:
+  provider: wine
+  version: latest
+
+# Direct portable install - no Chocolatey complexity
+install:
+  - kind: script
+    command: url="https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.7.9/npp.8.7.9.portable.zip" && dest="$WINEPREFIX/drive_c/Program Files/Notepad++" && mkdir -p "$dest" && [ -f "$dest/notepad++.exe" ] && exit 0 && curl -fsSL "$url" -o /tmp/npp.zip && unzip -o /tmp/npp.zip -d "$dest" && rm -f /tmp/npp.zip
+
+compatibility:
+  arch: win64
+  windowsVersion: win10
+  graphics:
+    backend: wined3d
+
+launch:
+  entrypoint: C:/Program Files/Notepad++/notepad++.exe
+
+entrypoints:
+  - id: notepadplusplus
+    name: Notepad++ v8.7.9 (portable)
+    executable: C:/Program Files/Notepad++/notepad++.exe
+
+state:
+  persistence: persistent
+
+provenance:
+  sources:
+    - uri: https://github.com/notepad-plus-plus/notepad-plus-plus/releases/tag/v8.7.9
+      note: Portable Notepad++ ZIP extracted directly into Wine prefix

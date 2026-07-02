@@ -1,0 +1,18 @@
+schemaVersion: winforge.app/v0
+name: winetest
+version: "1.0.0"
+
+runtime:
+  provider: wine
+  version: latest
+
+launch:
+  entrypoint: C:/windows/system32/notepad.exe
+
+entrypoints:
+  - id: notepad
+    name: Wine built-in Notepad
+    executable: C:/windows/system32/notepad.exe
+
+state:
+  persistence: persistent

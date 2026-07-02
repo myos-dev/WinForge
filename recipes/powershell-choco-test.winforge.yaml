@@ -1,0 +1,25 @@
+schemaVersion: winforge.app/v0
+name: pwschoco
+version: "1.0.0"
+
+runtime:
+  provider: wine
+  version: latest
+
+modules:
+  - type: chocolatey
+    install:
+      packages:
+        - 7zip.install
+
+# Open to the PowerShell wrapper (validates it was built correctly)
+launch:
+  entrypoint: C:/windows/system32/WindowsPowerShell/v1.0/powershell.exe
+
+entrypoints:
+  - id: powershell
+    name: PowerShell 7 (via powershell-wrapper)
+    executable: C:/windows/system32/WindowsPowerShell/v1.0/powershell.exe
+
+state:
+  persistence: persistent
