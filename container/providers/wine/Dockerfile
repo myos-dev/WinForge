@@ -28,8 +28,6 @@ RUN set -eux; \
         fontconfig \
         # Build / scripting
         python3 git \
-        # Rust toolchain for powershell-wrapper-for-wine
-        cargo rustc \
     ; \
     rm -rf /var/lib/apt/lists/*
 
@@ -71,6 +69,12 @@ ENV WINFORGE_ROOT=/opt/winforge \
     WINEDLLOVERRIDES="mscoree,mshtml=" \
     WINEDBG=-all \
     DISPLAY=:99
+
+# Install Rust toolchain (latest stable) via rustup for powershell-wrapper-for-wine
+RUN set -eux; \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; \
+    echo '[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"' >> /etc/bash.bashrc
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Common scripts
 COPY container/common/xvfb-entrypoint.sh /usr/local/bin/xvfb-entrypoint.sh
