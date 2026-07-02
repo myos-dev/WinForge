@@ -28,6 +28,7 @@ RUN set -eux; \
         fontconfig \
         # Build / scripting
         python3 git \
+        build-essential \
     ; \
     rm -rf /var/lib/apt/lists/*
 
