@@ -232,10 +232,6 @@ def generate_build_script(
         "#!/bin/bash",
         'set -euo pipefail',
         "",
-        # Clear inherited WINEDLLOVERRIDES during build -- the Dockerfile's
-        # mscoree,mshtml= override disables Wine's .NET runtime, which breaks
-        # .NET-dependent MSI installers like the PowerShell Core installer.
-        'export WINEDLLOVERRIDES=""',
         # Suppress Wine debugger so crash popups don't hang the build
         'export WINEDBG="-all"',
         r"printf '[winforge] Starting real build for %s v%s\n' " + _shell_quote(manifest.name) + " " + _shell_quote(manifest.version),
@@ -257,6 +253,13 @@ def generate_build_script(
         "echo ''",
         "",
         # ------------------------------------------------------------------
+        # Clear inherited WINEDLLOVERRIDES -- the Dockerfile's
+        # mscoree,mshtml= override disables Wine's .NET runtime. We keep it
+        # during wineboot (Phase 1) to avoid slow Mono initialization, then
+        # clear it here so .NET-dependent installers like PowerShell Core MSI
+        # can use Wine's built-in Mono.
+        'export WINEDLLOVERRIDES=""',
+        "",
         "### Phase 2: install-dependencies #################################",
         'echo "[winforge] Phase 2/6: Installing dependencies"',
     ]
