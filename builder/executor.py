@@ -119,7 +119,20 @@ def _find_engine(prefer: str | None = None) -> str:
     candidates = [prefer] if prefer else []
     candidates.extend(e for e in ("docker", "podman") if e != prefer)
     for cmd in candidates:
-        if shutil.which(cmd) is not None:
+        path = shutil.which(cmd)
+        if path is not None:
+            if cmd == "docker":
+                # Podman 5+ ships a Docker CLI emulation binary. Detect it
+                # so SELinux mount labels (':z') are applied correctly.
+                try:
+                    r = subprocess.run(
+                        [path, "--version"],
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    if "podman" in r.stdout.lower():
+                        return "podman"
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    pass
             return cmd
     msg = "No container engine found. Install Docker or Podman, or use --dry-run."
     raise RuntimeError(msg)
