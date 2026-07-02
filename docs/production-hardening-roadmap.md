@@ -57,18 +57,19 @@ The manifest field captures *intent*; the CLI flag allows the operator to *overr
 
 ## Theme 2: Chocolatey Integration
 
+### Status
+
+Implemented as a BlueBuild-style build-time module, patterned after myOS `type: dnf` layers.
+
 ### Problem
 
-Chocolatey is declared as an allowed install kind (`ALLOWED_INSTALL_KINDS` includes `"choco"`) but has zero implementation — the build script generator doesn't handle it. More broadly, every build-time tool with a prerequisite chain (pwsh, wrapper, chocolatey bootstrapper) forces recipe authors to wire up those deps manually.
+Chocolatey has a prerequisite chain: PowerShell Core, `powershell-wrapper-for-wine`, and the Chocolatey bootstrapper must exist inside the Wine prefix before package installation can work. Modeling that as hand-authored raw `install.kind: choco` steps makes recipe authors repeat setup logic and makes the YAML unlike the module-oriented myOS/BlueBuild recipe style.
 
-### Design: Module System (Phase 1 — Profile-based)
+### Implemented design: `modules[].type: chocolatey`
 
-Following [BlueBuild's module pattern](https://blue-build.org/reference/modules/), a module is a self-contained unit that knows its own prerequisites and can be declared in the recipe.
-
-**Phase 1** uses the existing `profiles` system — low schema risk, no new resolver. A `chocolatey` profile injects pwsh + wrapper dependencies, and `kind: choco` install steps handle package installation.
+Recipes declare package-manager intent as a top-level module:
 
 ```yaml
-# Phase 1 recipe
 schemaVersion: winforge.app/v0
 name: my-app
 version: "1.0.0"
@@ -76,68 +77,57 @@ runtime:
   provider: wine
   version: latest
 
-profiles:
-  - chocolatey
-
-install:
-  - kind: choco
-    command: install firefox
-  - kind: choco
-    command: install 7zip.install
+modules:
+  - type: chocolatey
+    install:
+      packages:
+        - firefox
+        - 7zip.install
 ```
 
-#### Prerequisite chain (handled by the profile)
-
-1. `winetricks powershell_core` — installs pwsh.exe into the prefix
-2. Build powershell-wrapper-for-wine from source (Rust cross-compile to `x86_64-pc-windows-gnu` target) — provides the `powershell.exe` shim that forwards to pwsh
-3. Chocolatey bootstrap via PowerShell: `iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))`
-
-Steps 1–2 are encoded by the `powershell-wrapper-pwsh-vnc.winforge.yaml` example recipe and are covered by strict load, dry-run bundle, bundle verification, and VNC run-plan tests. Step 3, Chocolatey bootstrap, remains proposed implementation work for the Chocolatey profile/module slice. A real Wine/container build remains live validation because it depends on network access, Winetricks, Git, Cargo, and the Rust Windows GNU target.
-
-### Design: Module System (Phase 2 — First-class modules)
-
-After proving the pattern, promote modules to a first-class manifest section:
+This follows the same shape as myOS DNF layers:
 
 ```yaml
-# Phase 2 recipe
-schemaVersion: winforge.app/v0
-name: my-app
-version: "1.0.0"
-
 modules:
-  - name: chocolatey
-    packages:
-      - firefox
-      - 7zip.install
+  - type: dnf
+    install:
+      packages:
+        - gcc
 ```
 
-A module resolver expands declarations into concrete dependencies and install steps, same as profiles but with richer semantics (params, lifecycle phases, version constraints).
+The module resolver lowers the declaration into concrete build behavior:
 
-### Design: Pre-baked runtime image (Phase 3)
+1. `winetricks powershell_core` prerequisite in the dependency phase.
+2. idempotent setup script that builds `powershell-wrapper-for-wine` and bootstraps Chocolatey through `pwsh.exe`.
+3. one internal `install.kind: choco` step per package, generated as `choco install <package> -y --no-progress`.
 
-Build a `winforge-wine-choco` runtime image on GHCR with pwsh + wrapper + chocolatey pre-installed. Eliminates the 2–5 minute wrapper build from every recipe's build time. The profile/module just selects the correct base image instead of building from source.
+`install.kind: choco` is therefore supported as the internal lowered form, but the public recipe shape should prefer `modules: - type: chocolatey`.
 
-### Changes required
+### Implemented changes
 
-| Phase | File | Change |
-|---|---|---|
-| **1** | `core/profiles.py` | Add `chocolatey` profile definition (pwsh + wrapper deps) |
-| **1** | `builder/pipeline.py` | Add `kind: choco` handler that runs `choco install` via pwsh in Wine |
-| **1** | `core/manifest.py` | No change — `choco` is already an allowed kind |
-| **1** | `tests/` | Profile expansion test + choco install script generation test |
-| **2** | `core/manifest.py` | Add `modules[]` root field |
-| **2** | new file | `core/modules.py` — module resolver/expander |
-| **3** | `container/providers/` | New provider definition + Dockerfile for pre-baked chocolatey image |
+| File | Change |
+|---|---|
+| `core/modules.py` | BlueBuild-style module parsing/expansion and Chocolatey package validation |
+| `core/manifest.py` | Adds `modules[]`, preserves module declarations, records module expansions, and validates lowered `choco` steps |
+| `builder/pipeline.py` | Generates safe PowerShell/Chocolatey build-script commands from lowered `choco` steps |
+| `examples/chocolatey-firefox.winforge.yaml` | Public-safe module recipe example |
+| `tests/test_chocolatey_module.py` | Schema, YAML, validation, and build-script coverage |
 
-### Acceptance criteria (Phase 1)
+### Implemented acceptance criteria
 
-- `chocolatey` profile expands into pwsh + wrapper dependencies in the build plan
-- `kind: choco` install step generates a valid `wine pwsh.exe -Command "choco install ..."` command in the build script
-- Profile expansion is visible in `winforge inspect`, `winforge plan`
-- Existing pwsh example recipe (`powershell-wrapper-pwsh-vnc`) continues to load, dry-run build, verify, and produce the expected VNC run plan
-- No internet access is required from the runtime container (build phase only)
+- `modules: - type: chocolatey` loads from strict YAML.
+- `modules[].install.packages` expands into `powershell_core`, wrapper/bootstrap setup, and package install steps.
+- Package names are validated so shell-like strings are rejected before build-script generation.
+- Lowered `choco` install steps generate PowerShell array invocation via `& choco @chocoArgs` instead of raw shell concatenation.
+- Direct malformed `install.kind: choco` steps fail closed instead of silently doing nothing.
+- Runtime containers remain network-isolated by default; Chocolatey is build-time only.
 
----
+### Remaining proposed work
+
+- First-class module registry files under `modules/<name>/module.yaml` instead of built-in Python definitions.
+- Module version pinning and shared dependency deduplication.
+- Offline/pre-cached Chocolatey package mode for environments that cannot allow networked builds.
+- Pre-baked `winforge-wine-choco` runtime/build image with pwsh, wrapper, and Chocolatey already installed to avoid repeated Rust wrapper builds.
 
 ## Theme 3: End-to-End Production Architecture
 
@@ -177,9 +167,9 @@ Once Themes 1 and 2 are complete, WinForge's architecture matches the Gemini-des
 | Order | Theme | Effort | Dependencies | Delivers |
 |---|---|---|---|---|
 | 1 | Runtime `--net none` default | Small (1–2 files + tests) | None | Implemented — immediate security hardening |
-| 2 | Chocolatey profile + `kind: choco` handler | Medium (profiles + pipeline + tests) | None | Proposed — recipe authors can use choco today |
+| 2 | BlueBuild-style Chocolatey module | Medium (module resolver + pipeline + tests) | None | Implemented — recipe authors declare `modules: - type: chocolatey` |
 | 3 | Network escape hatch (manifest field + CLI flag) | Small (manifest + launcher + kube) | Theme 1 (parallel ok) | Implemented — overridable isolation |
-| 4 | First-class module system | Medium (schema + resolver) | Theme 2 proves the pattern | Proposed — cleaner abstraction |
+| 4 | External module registry | Medium (module.yaml resolver) | Built-in Chocolatey module proves the pattern | Proposed — cleaner abstraction |
 | 5 | Pre-baked chocolatey runtime image | Medium (Dockerfile + CI + GHCR push) | Theme 2 | Proposed — faster builds |
 
 ## Review triggers

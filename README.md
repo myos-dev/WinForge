@@ -549,7 +549,7 @@ WinForge's design draws from the broader Wine/Proton ecosystem:
 
 Detailed analysis in [docs/reference-study.md](docs/reference-study.md).
 
-Proposed follow-up work from hard BYO installer probes is tracked in [docs/legacy-installer-debugging-backlog.md](docs/legacy-installer-debugging-backlog.md). Production hardening work for runtime network isolation, Chocolatey/module support, and the PowerShell wrapper proof recipe is tracked in [docs/production-hardening-roadmap.md](docs/production-hardening-roadmap.md).
+Proposed follow-up work from hard BYO installer probes is tracked in [docs/legacy-installer-debugging-backlog.md](docs/legacy-installer-debugging-backlog.md). Production hardening work for runtime network isolation, BlueBuild-style Chocolatey module support, and the PowerShell wrapper proof recipe is tracked in [docs/production-hardening-roadmap.md](docs/production-hardening-roadmap.md).
 
 ## Project Structure
 
@@ -560,6 +560,7 @@ WinForge/
 ├── cmd/winforge.py              # Repo-local development shim
 ├── core/
 │   ├── manifest.py              # Manifest model, validation, loading
+│   ├── modules.py               # BlueBuild-style build-time module expansion
 │   ├── prefix.py                # Prefix abstraction
 │   └── provenance.py            # Provenance tracking
 ├── runtime/

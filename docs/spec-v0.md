@@ -50,9 +50,22 @@ Strict YAML rules:
 
 `profiles` expands named, reviewable compatibility/dependency defaults into concrete recipe fields. The first implemented profile is `office-legacy-32bit`, which adds `win32`, `win7`, Office legacy DLL policy, and the Winetricks verbs from current Office/Bottles evidence. Explicit recipe fields override profile defaults.
 
+`modules` is a BlueBuild-style build-time module list. The first implemented module is `type: chocolatey`, patterned after myOS `type: dnf` layers: recipes declare packages under `modules[].install.packages`, and WinForge lowers the module into prerequisite dependencies, idempotent setup, and package install steps. Example:
+
+```yaml
+modules:
+  - type: chocolatey
+    install:
+      packages:
+        - firefox
+        - 7zip.install
+```
+
+The Chocolatey module installs `powershell_core` through Winetricks, builds `powershell-wrapper-for-wine`, bootstraps Chocolatey through `pwsh.exe`, and then runs `choco install <package> -y --no-progress` during the online build phase. `modules[].type` currently accepts `chocolatey`; package names must be non-empty strings containing only letters, numbers, dot, underscore, plus, or dash. Module expansion is recorded in `provenance.moduleExpansions`.
+
 `dependencies` supports build-time dependency installation. Allowed kinds: `winetricks`, `font`, `directx`, `package`, `runtime-component`.
 
-`install` supports build-time application installation. Allowed kinds: `msi`, `exe`, `portable`, `choco`, `script`, `bat`, and `cmd`. MSI/EXE/portable/BAT/CMD steps require `source`; script requires `command`. BAT/CMD steps execute through `wine cmd /c`, may declare `workingDirectory`, and are intended for operator-provided installer scripts from legitimate BYO media. Recipes must not use BAT/CMD support to encode activation bypasses, cracked/pre-activated payload flows, or unauthorized licensing automation.
+`install` supports build-time application installation. Allowed kinds: `msi`, `exe`, `portable`, `choco`, `script`, `bat`, and `cmd`. MSI/EXE/portable/BAT/CMD steps require `source`; script requires `command`. `choco` is the internal lowered form used by the Chocolatey module and requires `command: install` plus args. Public recipes should prefer `modules: - type: chocolatey` instead of hand-authored raw `install.kind: choco` steps. BAT/CMD steps execute through `wine cmd /c`, may declare `workingDirectory`, and are intended for operator-provided installer scripts from legitimate BYO media. Recipes must not use BAT/CMD support to encode activation bypasses, cracked/pre-activated payload flows, or unauthorized licensing automation.
 
 `filesystem` maps declared source files or directories into Windows-style targets under `drive_c`. `filesystem.mode: copy` is the default. `filesystem.mode: merge` copies the contents of a source directory into an existing target directory, enabling BlueBuild-style user-provided file trees such as `Program Files` overlays without nesting the source directory itself.
 

@@ -67,6 +67,8 @@ Suite metadata (`entrypoints[]` and `fileAssociations[]`) records multi-entry ap
 
 `core/profiles.py` expands reviewable named profiles into concrete compatibility/dependency policy. The initial `office-legacy-32bit` profile captures the current Office/Bottles evidence while preserving the expanded concrete policy in the manifest.
 
+`core/modules.py` expands BlueBuild-style build-time modules into concrete dependency/setup/install behavior. The first module is `type: chocolatey`, matching the myOS `type: dnf` YAML style: recipes declare packages under `modules[].install.packages`, while WinForge handles pwsh, powershell-wrapper-for-wine, Chocolatey bootstrap, and lowered package install steps.
+
 ### 8. Downloadable runner cache
 
 `winforge runners list|ensure|diagnose` exposes the runner-cache lifecycle. Diagnostics parse ELF interpreters so old 32-bit Wine builds can fail with actionable evidence such as missing `/lib/ld-linux.so.2` instead of an opaque shell error. This is required for 7040/VIC Office evidence because the Rustring/Bottles reference depends on legacy x86 Wine builds hosted by PlayOnLinux/Phoenicis.
