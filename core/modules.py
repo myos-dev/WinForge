@@ -19,7 +19,7 @@ CHOCOLATEY_SETUP_COMMAND = (
     'choco="$WINEPREFIX/drive_c/ProgramData/chocolatey/bin/choco.exe"; '
     'if [ -f "$choco" ] && [ -f "$wrapper" ]; then exit 0; fi; '
     'if ! command -v git >/dev/null 2>&1; then '
-    '  apt-get update -qq && apt-get install -y -qq --no-install-recommends git gcc libc-dev pkg-config; '
+    '  apt-get update -qq && apt-get install -y -qq --no-install-recommends git gcc libc-dev pkg-config gcc-mingw-w64-x86-64; '
     'fi; '
     'if ! command -v cargo >/dev/null 2>&1; then '
     '  curl -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal -q 2>/dev/null; '
