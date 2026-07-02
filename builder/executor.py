@@ -225,6 +225,7 @@ def execute_inside_container(
     timeout: int = 600,
     workspace: Path | str | None = None,
     runner_cache_dir: Path | str | None = None,
+    stop_before: str | None = None,
 ) -> BuildResult:
     """Run the WinForge build inside the runtime provider's Docker/Podman container.
 
@@ -236,6 +237,7 @@ def execute_inside_container(
         timeout:          Max seconds for the entire build.
         workspace:        Host workspace mounted read-only at /workspace.
         runner_cache_dir: Optional runner cache root for runtime.runner archives.
+        stop_before: Optional phase boundary for checkpoint prep, currently install-apps.
 
     Returns:
         BuildResult with success/failure and metadata.
@@ -259,6 +261,7 @@ def execute_inside_container(
         manifest,
         bundle_mount="/opt/winforge",
         workspace_mount="/workspace",
+        stop_before=stop_before,
     )
     script_path.parent.mkdir(parents=True, exist_ok=True)
     script_path.write_text(script, encoding="utf-8")

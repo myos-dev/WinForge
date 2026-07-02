@@ -110,6 +110,18 @@ winforge build examples/minimal.winforge.json --dry-run
 winforge bundle inspect dist/notepad-plus-plus-8.6.0
 winforge bundle verify dist/notepad-plus-plus-8.6.0
 
+# Locate/reuse prepared-prefix checkpoints for slow legacy installer debugging
+winforge debug checkpoint inspect dist/office-prep-output
+winforge debug checkpoint resume dist/office-prep-output \
+  --output dist/attempts \
+  --name office-install-attempt-001
+winforge compat test examples/notepad-plus-plus.winforge.yaml \
+  --mode build \
+  --stop-before install-apps
+winforge compat test examples/notepad-plus-plus.winforge.yaml \
+  --mode build \
+  --resume-from-bundle dist/attempts/office-install-attempt-001
+
 # Resolve built application artifacts by name from the local index
 winforge artifacts list
 winforge artifacts resolve notepad-plus-plus
@@ -242,6 +254,15 @@ filesystem:
 
 `mode: merge` copies the contents of the source directory into the target directory. That supports BlueBuild-style customer-provided folders such as `Program Files` trees without treating an entire Wine prefix as the source of truth. Installers/ISOs remain modeled through `install[]` and `sources[]`; BYO prefix import is still possible later as a convenience path, but reproducibility should be proven from installers/media/files first.
 
+Use `media stage` to copy or extract local BYO media into a normalized workspace tree before writing/running recipes:
+
+```bash
+winforge media stage ~/Downloads/vendor-suite.zip --name vendor-suite --workspace .
+# writes ./sources/vendor-suite/media and ./sources/vendor-suite/metadata/media-stage.json
+```
+
+The staged copy normalizes ownership/mode issues from read-only media and rejects archive path traversal. ISO staging requires a local extractor such as `bsdtar` or `7z`.
+
 Suite apps can also declare named entrypoints and file associations:
 
 ```yaml
@@ -272,6 +293,14 @@ winforge sources verify examples/notepad-plus-plus.winforge.yaml --workspace .
 ```
 
 The output is `schemaVersion: winforge.source-integrity/v0` and reports every declared source, install source, filesystem overlay, resolved local path, sha256 result, warning, and error. v0 builds consume local workspace files; remote URLs are recorded as provenance but must be materialized locally for install/filesystem steps.
+
+For BYO media, run a separate policy audit before spending time in Wine:
+
+```bash
+winforge sources audit examples/notepad-plus-plus.winforge.yaml --workspace .
+```
+
+The audit emits `schemaVersion: winforge.source-policy/v0`, scans local source paths/names only, and blocks suspicious activation/KMS/crack/bypass/product-key artifact names without reading file contents into the report.
 
 For a compatibility evidence pass:
 
@@ -306,7 +335,16 @@ winforge compat test examples/notepad-plus-plus.winforge.yaml \
   --run-timeout 60
 ```
 
-The output is `schemaVersion: winforge.compat-test/v0`. `--mode dry-run` includes source integrity, dry-run bundle creation, bundle verification, and a `winforge.run-plan/v0` launch plan carrying runtime and compatibility policy. `--mode build` performs the real container build and records build execution evidence. `--mode run` records real build evidence plus `winforge.run-result/v0` app launch evidence.
+The output is `schemaVersion: winforge.compat-test/v0`. `--mode dry-run` includes source integrity, dry-run bundle creation, bundle verification, and a `winforge.run-plan/v0` launch plan carrying runtime and compatibility policy. `--mode build` performs the real container build and records build execution evidence. `--mode run` records real build evidence plus `winforge.run-result/v0` app launch evidence. Failed real builds attach `schemaVersion: winforge.failure-analysis/v0` and write `metadata/failure-analysis.json` plus `metadata/failure-summary.md` inside the bundle when Windows/Wine installer logs are available.
+
+Analyze an existing failed bundle or log tree directly with:
+
+```bash
+winforge failure analyze dist/my-app-1.0.0
+# emits winforge.failure-analysis/v0 and writes metadata/failure-analysis.json + failure-summary.md
+```
+
+The failure analyzer scans `logs/`, `prefix/drive_c/users/*/Temp`, and `prefix/drive_c/windows/temp` for `.log`/`.txt` files, prioritizes first MSI/Catalyst failure windows such as `Return value 3`, `MSI(ERROR)`, `Failed to install product`, and `ErrorCode`, and redacts product-key-like tokens and common secret assignments from report excerpts.
 
 The packaged seed corpus is available with:
 
@@ -510,6 +548,8 @@ WinForge's design draws from the broader Wine/Proton ecosystem:
 | [LSW](https://github.com/barrersoftware/lsw) | Foundation-first compatibility architecture and path/registry translation awareness; WinForge does not adopt its no-Wine/kernel/PE-loader goal |
 
 Detailed analysis in [docs/reference-study.md](docs/reference-study.md).
+
+Proposed follow-up work from hard BYO installer probes is tracked in [docs/legacy-installer-debugging-backlog.md](docs/legacy-installer-debugging-backlog.md).
 
 ## Project Structure
 

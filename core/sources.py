@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from core.manifest import Manifest
+from core.media import SOURCE_POLICY_SCHEMA_VERSION, audit_source_path
 
 SOURCE_INTEGRITY_SCHEMA_VERSION = "winforge.source-integrity/v0"
 _SHA256_RE = re.compile(r"^[A-Fa-f0-9]{64}$")
@@ -219,3 +220,121 @@ def _validate_expected_sha(location: str, expected_sha256: str | None) -> str | 
     if not isinstance(expected_sha256, str) or not _SHA256_RE.fullmatch(expected_sha256):
         return f"{location}: sha256 must be 64 hexadecimal characters"
     return None
+
+
+def audit_manifest_sources(manifest: Manifest, *, workspace: Path | str | None = None) -> dict[str, Any]:
+    """Audit manifest source paths for policy-blocked artifact names.
+
+    This is a preflight safety check. It scans local path names only and does
+    not read source file contents, so secrets/product keys in local media cannot
+    leak into the audit report.
+    """
+    workspace_path = Path(workspace or Path.cwd()).resolve()
+    items: list[dict[str, Any]] = []
+    findings: list[dict[str, Any]] = []
+    errors: list[str] = []
+    warnings: list[str] = []
+    seen: set[Path] = set()
+
+    def add_item(*, location: str, usage: str, source: str | None, source_id: str | None = None, source_type: str | None = None, source_policy: str | None = None) -> None:
+        item: dict[str, Any] = {
+            "location": location,
+            "usage": usage,
+            "valid": True,
+        }
+        if source_id:
+            item["sourceId"] = source_id
+        if source_type:
+            item["sourceType"] = source_type
+        if source_policy:
+            item["sourcePolicy"] = source_policy
+        if not source:
+            item.update({"valid": False, "status": "missing-source", "error": f"{location}: source is missing"})
+            errors.append(item["error"])
+            items.append(item)
+            return
+        item["source"] = source
+        if is_remote_source(source):
+            item.update({"status": "remote", "audited": False})
+            warning = f"{location}: remote source was not audited locally: {source}"
+            item["warning"] = warning
+            warnings.append(warning)
+            items.append(item)
+            return
+        resolved = resolve_source_path(source, workspace_path)
+        item["resolvedPath"] = str(resolved)
+        if not resolved.exists():
+            item.update({"valid": False, "status": "missing", "error": f"{location}: missing local source: {resolved}"})
+            errors.append(item["error"])
+            items.append(item)
+            return
+        resolved_key = resolved.resolve()
+        if resolved_key in seen:
+            item.update({"status": "duplicate", "audited": False})
+            items.append(item)
+            return
+        seen.add(resolved_key)
+        audit = audit_source_path(resolved, location=location)
+        item.update({
+            "status": "audited" if audit["valid"] else "policy-blocked",
+            "audited": True,
+            "findingCount": audit["summary"]["findings"],
+            "blockedCount": audit["summary"]["blocked"],
+            "valid": audit["valid"],
+        })
+        for finding in audit["findings"]:
+            findings.append({
+                **finding,
+                "usage": usage,
+                "source": source,
+                **({"sourceId": source_id} if source_id else {}),
+            })
+        for error in audit["errors"]:
+            errors.append(f"{location}: {error}")
+        items.append(item)
+
+    for index, source in enumerate(manifest.sources):
+        ref = source.ref
+        add_item(
+            location=f"sources[{index}]",
+            usage="declared-source",
+            source=str(ref) if ref is not None else None,
+            source_id=source.id,
+            source_type=source.type,
+            source_policy=source.policy,
+        )
+
+    for index, step in enumerate(manifest.install):
+        if step.source:
+            add_item(
+                location=f"install[{index}].source",
+                usage=f"install:{step.kind}",
+                source=step.source,
+            )
+
+    for index, mapping in enumerate(manifest.filesystem):
+        add_item(
+            location=f"filesystem[{index}].source",
+            usage="filesystem",
+            source=mapping.source,
+        )
+
+    blocked = sum(1 for finding in findings if finding.get("severity") == "blocked")
+    summary = {
+        "checked": len(items),
+        "audited": sum(1 for item in items if item.get("audited")),
+        "findings": len(findings),
+        "blocked": blocked,
+        "warnings": len(warnings),
+        "errors": len(errors),
+    }
+    return {
+        "schemaVersion": SOURCE_POLICY_SCHEMA_VERSION,
+        "workspace": str(workspace_path),
+        "valid": not errors and blocked == 0,
+        "summary": summary,
+        "items": items,
+        "findings": findings,
+        "errors": errors,
+        "warnings": warnings,
+    }

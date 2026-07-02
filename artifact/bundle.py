@@ -9,10 +9,13 @@ from core.manifest import Manifest
 from runtime.providers import resolve_runtime
 
 
+def bundle_path_for(manifest: Manifest, output_dir: Path) -> Path:
+    return output_dir / _safe_name(f"{manifest.name}-{manifest.version}")
+
+
 def create_bundle(manifest: Manifest, output_dir: Path, *,
                   dry_run: bool) -> Path:
-    bundle_path = output_dir / _safe_name(
-        f"{manifest.name}-{manifest.version}")
+    bundle_path = bundle_path_for(manifest, output_dir)
     if bundle_path.exists():
         raise FileExistsError(bundle_path)
     for rel in ("prefix/drive_c", "runtime", "launch", "metadata",
