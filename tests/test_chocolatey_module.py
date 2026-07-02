@@ -26,6 +26,34 @@ def _module_manifest() -> dict[str, object]:
     }
 
 
+
+class ChocolateyModuleUnitTests(unittest.TestCase):
+    """Standalone unit tests for module expansion not mediated by Manifest.from_dict."""
+
+    def test_apply_modules_empty(self):
+        from core.modules import apply_modules
+        result = apply_modules({"schemaVersion": "winforge.app/v0"})
+        self.assertNotIn("provenance", result)
+
+    def test_apply_modules_preserves_existing_provenance(self):
+        from core.modules import apply_modules
+        data = {
+            "schemaVersion": "winforge.app/v0",
+            "modules": [{"type": "chocolatey", "install": {"packages": ["firefox"]}}],
+            "provenance": {"builtBy": "test"}
+        }
+        result = apply_modules(data)
+        self.assertEqual(result["provenance"]["builtBy"], "test")
+        self.assertIn("moduleExpansions", result["provenance"])
+
+    def test_modulespec_round_trip(self):
+        from core.modules import ModuleSpec
+        orig = ModuleSpec.from_dict({"type": "chocolatey", "install": {"packages": ["firefox", "7zip.install"]}}, 0)
+        d = orig.to_dict()
+        restored = ModuleSpec.from_dict(d, 0)
+        self.assertEqual(orig.type, restored.type)
+        self.assertEqual(orig.install, restored.install)
+
 class ChocolateyModuleManifestTests(unittest.TestCase):
     def test_bluebuild_style_chocolatey_module_expands_to_dependencies_and_install_steps(self):
         manifest = Manifest.from_dict(_module_manifest())

@@ -1,6 +1,6 @@
 # WinForge Production Hardening Roadmap
 
-Status: partially implemented — runtime network isolation implemented; Chocolatey/module work proposed
+Status: partially implemented — runtime network isolation implemented; BlueBuild-style Chocolatey module implemented
 Date: 2026-07-02
 
 ## Objective
