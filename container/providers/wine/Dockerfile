@@ -27,7 +27,9 @@ RUN set -eux; \
         cabextract p7zip-full unzip bzip2 xz-utils \
         fontconfig \
         # Build / scripting
-        python3 \
+        python3 git \
+        # Rust toolchain for powershell-wrapper-for-wine
+        cargo rustc \
     ; \
     rm -rf /var/lib/apt/lists/*
 
@@ -67,6 +69,7 @@ ENV WINFORGE_ROOT=/opt/winforge \
     WINEARCH=win64 \
     WINEDEBUG=-all \
     WINEDLLOVERRIDES="mscoree,mshtml=" \
+    WINEDBG=-all \
     DISPLAY=:99
 
 # Common scripts
