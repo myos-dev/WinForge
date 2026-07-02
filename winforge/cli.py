@@ -145,6 +145,7 @@ def cmd_compat_test(args):
         output_dir=Path(args.output),
         workspace=Path(args.workspace) if args.workspace else Path.cwd(),
         graphics=args.graphics,
+        network=args.network,
         engine=args.engine,
         mode=args.mode,
         build_timeout=args.build_timeout,
@@ -272,6 +273,7 @@ def cmd_run(args):
         files=args.files,
         runner_cache_dir=Path(args.runner_cache_dir) if args.runner_cache_dir else None,
         require_runner=not args.dry_run,
+        network=args.network,
     )
     if args.dry_run:
         print(json.dumps(plan, indent=2, sort_keys=True))
@@ -536,6 +538,8 @@ def build_parser():
                    help="Container engine (podman, docker). Auto-detect if omitted.")
     p.add_argument("--dry-run", action="store_true",
                    help="Print the run plan without starting the container")
+    p.add_argument("--network", choices=["none", "bridge", "host"],
+                   help="Runtime container network mode; defaults to bundle runtime.network")
     p.add_argument("--entrypoint", help="Named suite entrypoint id to run")
     p.add_argument("files", nargs="*", help="Host files to pass to the selected application entrypoint")
     p.add_argument("--vnc-port", type=int, default=5900,
@@ -700,6 +704,7 @@ def build_parser():
     cp.add_argument("--workspace", help="Workspace root for relative local sources (default: cwd)")
     cp.add_argument("--output", default="dist", help="Output directory for evidence bundles")
     cp.add_argument("--graphics", choices=["headless", "vnc"], default="headless", help="Graphics mode for run-plan/run evidence")
+    cp.add_argument("--network", choices=["none", "bridge", "host"], help="Runtime network mode for run-plan/run evidence")
     cp.add_argument("--engine", default=None, help="Container engine name to record/use in evidence")
     cp.add_argument("--mode", choices=["dry-run", "build", "run"], default="dry-run", help="Evidence mode: dry-run, real build, or real build+run")
     cp.add_argument("--build-timeout", type=int, default=600, help="Max seconds for real build mode")

@@ -129,7 +129,7 @@ winforge artifacts resolve notepad-plus-plus
 # Preview and run the built application artifact by app name or bundle path
 winforge run --dry-run --graphics headless notepad-plus-plus
 winforge run --graphics headless notepad-plus-plus
-winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/notepad-plus-plus-8.6.0
+winforge run --graphics vnc --network bridge --vnc-port 5900 --novnc-port 6080 dist/notepad-plus-plus-8.6.0
 
 # Export a runnable application OCI image by app name or bundle path
 winforge export oci notepad-plus-plus \
@@ -396,8 +396,8 @@ winforge run --dry-run --graphics headless dist/my-app-1.0.0
 winforge run --graphics headless dist/my-app-1.0.0 \
   --runner-cache-dir "$HOME/winforge-runners"
 
-# Visible execution with loopback-only VNC and noVNC/websockify ports
-winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/my-app-1.0.0
+# Visible execution with bridge networking and host-loopback-published VNC/noVNC ports
+winforge run --graphics vnc --network bridge --vnc-port 5900 --novnc-port 6080 dist/my-app-1.0.0
 ```
 
 For v0, the bundle is mounted read-only at `/opt/winforge/bundle`; the prefix
@@ -549,7 +549,7 @@ WinForge's design draws from the broader Wine/Proton ecosystem:
 
 Detailed analysis in [docs/reference-study.md](docs/reference-study.md).
 
-Proposed follow-up work from hard BYO installer probes is tracked in [docs/legacy-installer-debugging-backlog.md](docs/legacy-installer-debugging-backlog.md).
+Proposed follow-up work from hard BYO installer probes is tracked in [docs/legacy-installer-debugging-backlog.md](docs/legacy-installer-debugging-backlog.md). Production hardening work for runtime network isolation, BlueBuild-style Chocolatey module support, and the PowerShell wrapper proof recipe is tracked in [docs/production-hardening-roadmap.md](docs/production-hardening-roadmap.md).
 
 ## Project Structure
 
@@ -560,6 +560,7 @@ WinForge/
 ├── cmd/winforge.py              # Repo-local development shim
 ├── core/
 │   ├── manifest.py              # Manifest model, validation, loading
+│   ├── modules.py               # BlueBuild-style build-time module expansion
 │   ├── prefix.py                # Prefix abstraction
 │   └── provenance.py            # Provenance tracking
 ├── runtime/

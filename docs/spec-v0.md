@@ -44,13 +44,28 @@ Strict YAML rules:
 
 `runtime.runner` is optional and selects a downloadable runner archive alias within the provider. Phase 6F adds `pol-8.2`, `pol-4.3`, and `pol-3.0.3` as Wine runner aliases backed by PlayOnLinux/Phoenicis-hosted upstream Wine x86 tarballs. These are not a separate PlayOnLinux provider; they are cacheable Wine runner archives with pinned URL/SHA-256 provenance. Resolved runtime metadata records `runner`, `runnerVersion`, `runnerSource`, `runnerUrl`, `runnerSha256`, and `runnerArch` when a recipe requests a downloadable runner.
 
+`runtime.network` is optional and defaults to `none`. Supported values are `none`, `bridge`, and `host`. This field records runtime network intent for the sealed application artifact, not build-container networking: build containers keep default networking so installers, Winetricks verbs, Chocolatey, Git, and other build-time tooling can download dependencies. The resolved execution graph records network intent under `runnerRuntime.network`, and `winforge run --network <mode>` can override it at operator run time.
+
 `sources` records upstream/local source provenance plus BYO/legal source policy. Supported source `type` values include `installer`, `iso`, `archive`, `files`, `prefix`, `font`, and `other`. Supported source `policy` values include `bring-your-own-files`, `bring-your-own-installer`, `bring-your-own-licensed-media`, `bring-your-own-prefix`, `redistributable`, and fixture/external marker policies. v0 source integrity verifies local `file://` and relative workspace paths plus declared `sha256` values for file sources; remote URLs are recorded but not fetched by the dependency-light verifier.
 
 `profiles` expands named, reviewable compatibility/dependency defaults into concrete recipe fields. The first implemented profile is `office-legacy-32bit`, which adds `win32`, `win7`, Office legacy DLL policy, and the Winetricks verbs from current Office/Bottles evidence. Explicit recipe fields override profile defaults.
 
+`modules` is a BlueBuild-style build-time module list. The first implemented module is `type: chocolatey`, patterned after myOS `type: dnf` layers: recipes declare packages under `modules[].install.packages`, and WinForge lowers the module into prerequisite dependencies, idempotent setup, and package install steps. Example:
+
+```yaml
+modules:
+  - type: chocolatey
+    install:
+      packages:
+        - firefox
+        - 7zip.install
+```
+
+The Chocolatey module installs `powershell_core` through Winetricks, builds `powershell-wrapper-for-wine`, bootstraps Chocolatey through `pwsh.exe`, and then runs `choco install <package> -y --no-progress` during the online build phase. `modules[].type` currently accepts `chocolatey`; package names must be non-empty strings containing only letters, numbers, dot, underscore, plus, or dash. Module expansion is recorded in `provenance.moduleExpansions`.
+
 `dependencies` supports build-time dependency installation. Allowed kinds: `winetricks`, `font`, `directx`, `package`, `runtime-component`.
 
-`install` supports build-time application installation. Allowed kinds: `msi`, `exe`, `portable`, `choco`, `script`, `bat`, and `cmd`. MSI/EXE/portable/BAT/CMD steps require `source`; script requires `command`. BAT/CMD steps execute through `wine cmd /c`, may declare `workingDirectory`, and are intended for operator-provided installer scripts from legitimate BYO media. Recipes must not use BAT/CMD support to encode activation bypasses, cracked/pre-activated payload flows, or unauthorized licensing automation.
+`install` supports build-time application installation. Allowed kinds: `msi`, `exe`, `portable`, `choco`, `script`, `bat`, and `cmd`. MSI/EXE/portable/BAT/CMD steps require `source`; script requires `command`. `choco` is the internal lowered form used by the Chocolatey module and requires `command: install` plus args. Public recipes should prefer `modules: - type: chocolatey` instead of hand-authored raw `install.kind: choco` steps. BAT/CMD steps execute through `wine cmd /c`, may declare `workingDirectory`, and are intended for operator-provided installer scripts from legitimate BYO media. Recipes must not use BAT/CMD support to encode activation bypasses, cracked/pre-activated payload flows, or unauthorized licensing automation.
 
 `filesystem` maps declared source files or directories into Windows-style targets under `drive_c`. `filesystem.mode: copy` is the default. `filesystem.mode: merge` copies the contents of a source directory into an existing target directory, enabling BlueBuild-style user-provided file trees such as `Program Files` overlays without nesting the source directory itself.
 
@@ -190,7 +205,7 @@ Runtime state is separate from artifact contents and should be persisted, discar
 
 ## Execution graph
 
-`metadata/graph.json` is build/provenance/contract metadata. It records application identity, requested and resolved builder runtime, requested and resolved runner runtime, supported graphics modes, launch contract, exact-runtime compatibility policy, requested compatibility policy, and deterministic build phase nodes/edges.
+`metadata/graph.json` is build/provenance/contract metadata. It records application identity, requested and resolved builder runtime, requested and resolved runner runtime, runner runtime network intent, supported graphics modes, launch contract, exact-runtime compatibility policy, requested compatibility policy, and deterministic build phase nodes/edges.
 
 The graph should not become a general runtime scheduler. Runtime should be boring: verify artifact, prepare state, start display if requested, and launch the application contract.
 
@@ -204,9 +219,9 @@ The graph should not become a general runtime scheduler. Runtime should be borin
 
 `winforge run <bundle-or-app-ref>` consumes a verified bundle, either directly by path or resolved through the local artifact index, and must fail before container planning when `winforge bundle verify <bundle>` would fail.
 
-`winforge run --dry-run <bundle>` prints a `winforge.run-plan/v0` document containing the selected runtime image, graphics mode, selected suite entrypoint, optional host-file routing, optional runner-cache mount, launch command, container environment, and container argv without starting the container. `--entrypoint <id>` selects a named `entrypoints[]` item. Additional positional file paths are mounted read-only under `/mnt/winforge-inputs/<n>` and passed to Wine as `Z:\mnt\winforge-inputs\<n>\<name>` arguments.
+`winforge run --dry-run <bundle>` prints a `winforge.run-plan/v0` document containing the selected runtime image, runtime network mode, graphics mode, selected suite entrypoint, optional host-file routing, optional runner-cache mount, launch command, container environment, and container argv without starting the container. `--entrypoint <id>` selects a named `entrypoints[]` item. `--network none|bridge|host` overrides the bundle's `runnerRuntime.network` intent for that run; if the manifest does not declare network intent, the selected run default is `none`, which emits `--net none` in the container argv so Win32 applications are air-gapped by default. Additional positional file paths are mounted read-only under `/mnt/winforge-inputs/<n>` and passed to Wine as `Z:\mnt\winforge-inputs\<n>\<name>` arguments.
 
-`--graphics headless` runs through the runtime image Xvfb entrypoint without publishing ports. `--graphics vnc` publishes loopback-only VNC and noVNC/websockify ports (`127.0.0.1:<vnc-port>:5900` and `127.0.0.1:<novnc-port>:6080`) and starts `x11vnc` plus `websockify` inside the container.
+`--graphics headless` runs through the runtime image Xvfb entrypoint without publishing ports and is compatible with all network modes. `--graphics vnc` requires `--network bridge`; that is the only local container mode where Docker/Podman host port publishing can bind VNC/noVNC access to host loopback (`127.0.0.1:<vnc-port>:5900` and `127.0.0.1:<novnc-port>:6080`). The VNC helpers still listen inside the container, so bridge-mode VNC should not be attached to an untrusted/shared container network. VNC is rejected with `network: none` because the ports would be unusable, and with `network: host` because the container's unauthenticated `x11vnc`/`websockify` listeners could be exposed on host interfaces.
 
 The v0 runner mounts the bundle read-only at `/opt/winforge/bundle`, copies `prefix/` to `/tmp/winforge-prefix`, sets `WINEPREFIX` to that copy, then launches the application entrypoint. When a cached runner is mounted, it lives at `/opt/winforge-runner` and is selected through `PATH`/`WINFORGE_RUNNER_BIN`. This preserves the sealed artifact while allowing Wine to mutate runtime state.
 
@@ -239,3 +254,5 @@ Embedded artifact metadata uses `schemaVersion: winforge.artifact-image/v0`. OCI
 Digest-pinned image refs are required by default because Kubernetes deployment identity should not depend on mutable tags. `--allow-mutable-tag` exists only for explicit local/demo override.
 
 The v0 manifest emitter creates a Deployment plus state/export PVCs by default. Runtime state mounts at `/var/lib/winforge/state`; exports mount at `/exports`. `--no-pvc` replaces the PVCs with `emptyDir` volumes for smoke/demo manifests. Kubernetes labels are normalized for selector/tooling safety; exact WinForge metadata such as schema, raw app name, app version, and image ref is preserved in annotations.
+
+Kubernetes export reads `runnerRuntime.network` from the bundle graph. `network: none` emits `hostNetwork: false` plus a deny-all-egress `NetworkPolicy`; enforcement requires a NetworkPolicy-capable cluster CNI, and this policy only controls egress. `network: host` emits `hostNetwork: true` and no deny-egress policy. `network: bridge` maps to ordinary pod networking (`hostNetwork: false`) without the deny-egress policy. Kubernetes does not have a direct Docker/Podman `--net` flag, so these outputs are the closest v0 deployment intent mapping rather than a byte-for-byte runtime equivalent.

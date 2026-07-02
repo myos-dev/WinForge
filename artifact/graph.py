@@ -29,7 +29,9 @@ def build_execution_graph(manifest: Manifest) -> dict[str, Any]:
     phase_plan = build_plan(manifest)
     phase_nodes = [_phase_node(phase) for phase in phase_plan]
 
-    runtime_payload = _runtime_payload(runtime)
+    builder_runtime_payload = _runtime_payload(runtime)
+    runner_runtime_payload = dict(builder_runtime_payload)
+    runner_runtime_payload["network"] = manifest.runtime.network
 
     nodes: list[dict[str, Any]] = [
         {
@@ -44,8 +46,8 @@ def build_execution_graph(manifest: Manifest) -> dict[str, Any]:
         {
             "id": runtime_node_id,
             "kind": "runtime-image",
-            "label": runtime_payload["image"],
-            "runtime": dict(runtime_payload),
+            "label": builder_runtime_payload["image"],
+            "runtime": dict(builder_runtime_payload),
         },
         *phase_nodes,
         {
@@ -104,8 +106,8 @@ def build_execution_graph(manifest: Manifest) -> dict[str, Any]:
             "kind": "winforge.bundle",
             "path": ".",
         },
-        "builderRuntime": dict(runtime_payload),
-        "runnerRuntime": dict(runtime_payload),
+        "builderRuntime": dict(builder_runtime_payload),
+        "runnerRuntime": dict(runner_runtime_payload),
         "graphics": {
             "defaultMode": DEFAULT_GRAPHICS_MODE,
             "supportedModes": SUPPORTED_GRAPHICS_MODES,

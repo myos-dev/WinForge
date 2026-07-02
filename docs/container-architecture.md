@@ -110,9 +110,8 @@ Debian/Ubuntu images do not invoke it under `dash` and fail before Wine starts.
 4. Create prefix directory if `WINEFS=builder`
 5. Execute the provided command (builder or `winforge run` launcher script)
 
-For `winforge run --graphics vnc`, the launcher script starts `x11vnc` against
-the Xvfb display and starts `websockify` for browser/noVNC access. Ports are
-published on host loopback only by default.
+For `winforge run --graphics vnc --network bridge`, the launcher script starts `x11vnc` against
+the Xvfb display and starts `websockify` for browser/noVNC access. Docker/Podman host port publishing binds access to host loopback; the helpers still listen inside the container, so do not attach bridge-mode VNC runs to untrusted/shared container networks.
 
 ## Bind Mounts and SELinux
 
@@ -157,7 +156,7 @@ winforge bundle verify dist/notepad-plus-plus-portable-0.1.0
 # Preview and execute a verified bundle
 winforge run --dry-run --graphics headless dist/notepad-plus-plus-portable-0.1.0
 winforge run --graphics headless dist/notepad-plus-plus-portable-0.1.0
-winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/notepad-plus-plus-portable-0.1.0
+winforge run --graphics vnc --network bridge --vnc-port 5900 --novnc-port 6080 dist/notepad-plus-plus-portable-0.1.0
 
 # Export the verified bundle as a runnable application OCI image
 winforge export oci dist/notepad-plus-plus-portable-0.1.0 \

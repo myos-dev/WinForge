@@ -192,6 +192,45 @@ class RealCompatibilityEvidenceTests(unittest.TestCase):
         self.assertEqual(payload["run"], {"attempted": False, "reason": "mode=dry-run"})
 
 
+    def test_cli_compat_vnc_requires_and_accepts_bridge_network(self):
+        repo = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = _write_fixture_workspace(root)
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "cmd/winforge.py",
+                    "compat",
+                    "test",
+                    str(manifest_path),
+                    "--workspace",
+                    str(root),
+                    "--output",
+                    str(root / "dist"),
+                    "--mode",
+                    "dry-run",
+                    "--graphics",
+                    "vnc",
+                    "--network",
+                    "bridge",
+                    "--engine",
+                    "docker",
+                ],
+                cwd=repo,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["classification"], "dry-run-planned")
+        self.assertEqual(payload["runPlan"]["graphics"]["mode"], "vnc")
+        self.assertEqual(payload["runPlan"]["runtime"]["network"], "bridge")
+        self.assertEqual(payload["runPlan"]["container"]["network"], "bridge")
+
+
 class CompatibilityCorpusTests(unittest.TestCase):
     def test_default_corpus_lists_seed_apps_with_tiers_and_statuses(self):
         corpus = load_default_corpus()

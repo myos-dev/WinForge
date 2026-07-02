@@ -9,12 +9,14 @@ from typing import Any
 
 from core.compatibility import CompatibilityPolicyError, normalize_compatibility_policy
 from core.profiles import ProfileError, apply_profiles
+from core.modules import ModuleError, ModuleSpec, apply_modules
 
 SCHEMA_VERSION = "winforge.app/v0"
 LEGACY_SCHEMA_VERSION = "winforge.dev/v0"
 SUPPORTED_SCHEMA_VERSIONS = {SCHEMA_VERSION, LEGACY_SCHEMA_VERSION}
 
 ALLOWED_RUNTIME_PROVIDERS = {"wine", "staging", "umu-proton-ge"}
+ALLOWED_RUNTIME_NETWORK_MODES = {"none", "bridge", "host"}
 ALLOWED_DEPENDENCY_KINDS = {"winetricks", "font", "directx", "package", "runtime-component"}
 ALLOWED_INSTALL_KINDS = {"msi", "exe", "portable", "choco", "script", "bat", "cmd"}
 
@@ -24,6 +26,7 @@ ROOT_FIELDS = {
     "version",
     "runtime",
     "profiles",
+    "modules",
     "sources",
     "dependencies",
     "install",
@@ -38,7 +41,7 @@ ROOT_FIELDS = {
     "exports",
     "provenance",
 }
-RUNTIME_FIELDS = {"provider", "version", "source", "channel", "digest", "runner"}
+RUNTIME_FIELDS = {"provider", "version", "source", "channel", "digest", "runner", "network"}
 DEPENDENCY_FIELDS = {"kind", "verbs", "name", "version", "sha256"}
 INSTALL_FIELDS = {"kind", "source", "sha256", "target", "command", "args", "workingDirectory"}
 FILESYSTEM_FIELDS = {"source", "target", "sha256", "mode"}
@@ -49,6 +52,7 @@ FILE_ASSOCIATION_FIELDS = {"entrypoint", "extensions", "mime"}
 ALLOWED_SOURCE_TYPES = {"installer", "iso", "archive", "files", "prefix", "font", "other"}
 ALLOWED_SOURCE_POLICIES = {"bring-your-own-files", "bring-your-own-installer", "bring-your-own-licensed-media", "bring-your-own-prefix", "redistributable", "synthetic-fixture", "external-local-file-required", "requires-local-installer-and-overlay", "class-marker-only"}
 ALLOWED_FILE_MAPPING_MODES = {"copy", "merge"}
+CHOCO_ARG_RE = re.compile(r"^(?:[A-Za-z0-9][A-Za-z0-9_.+-]*|--?[A-Za-z0-9][A-Za-z0-9_.-]*)$")
 
 
 class ManifestError(ValueError):
@@ -63,6 +67,7 @@ class RuntimeSpec:
     channel: str | None = None
     digest: str | None = None
     runner: str | None = None
+    network: str = "none"
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]):
@@ -71,6 +76,9 @@ class RuntimeSpec:
         version = _required_str(data, "runtime.version")
         if provider not in ALLOWED_RUNTIME_PROVIDERS:
             raise ManifestError("runtime.provider must be one of: " + ", ".join(sorted(ALLOWED_RUNTIME_PROVIDERS)))
+        network = _optional_str(data, "network") or "none"
+        if network not in ALLOWED_RUNTIME_NETWORK_MODES:
+            raise ManifestError("runtime.network must be one of: " + ", ".join(sorted(ALLOWED_RUNTIME_NETWORK_MODES)))
         return cls(
             provider,
             version,
@@ -78,6 +86,7 @@ class RuntimeSpec:
             _optional_str(data, "channel"),
             _optional_str(data, "digest"),
             _optional_str(data, "runner"),
+            network,
         )
 
     def to_dict(self):
@@ -88,6 +97,7 @@ class RuntimeSpec:
             "channel": self.channel,
             "digest": self.digest,
             "runner": self.runner,
+            "network": self.network,
         })
 
 
@@ -145,6 +155,17 @@ class InstallStep:
             raise ManifestError(f"install[{index}].source is required for {kind}")
         if kind == "script" and not data.get("command"):
             raise ManifestError(f"install[{index}].command is required for script")
+        if kind == "choco":
+            command = _optional_str(data, "command")
+            if command != "install":
+                raise ManifestError(f"install[{index}].command must be install for choco")
+            if not args:
+                raise ManifestError(f"install[{index}].args must include a Chocolatey package")
+            for arg_index, arg in enumerate(args):
+                if not CHOCO_ARG_RE.fullmatch(arg):
+                    raise ManifestError(
+                        f"install[{index}].args[{arg_index}] must use letters, numbers, dot, underscore, plus, or dash"
+                    )
         return cls(
             kind,
             _optional_str(data, "source"),
@@ -350,6 +371,7 @@ class Manifest:
     version: str
     runtime: RuntimeSpec
     profiles: list[str]
+    modules: list[ModuleSpec]
     dependencies: list[DependencySpec]
     install: list[InstallStep]
     filesystem: list[FileMapping]
@@ -371,7 +393,8 @@ class Manifest:
         _reject_unknown(data, ROOT_FIELDS, "manifest")
         try:
             data = apply_profiles(data)
-        except ProfileError as exc:
+            data = apply_modules(data)
+        except (ProfileError, ModuleError) as exc:
             raise ManifestError(str(exc)) from exc
         schema = _required_str(data, "schemaVersion")
         if schema not in SUPPORTED_SCHEMA_VERSIONS:
@@ -395,6 +418,7 @@ class Manifest:
             raise ManifestError(str(exc)) from exc
         state = _object(data.get("state", {}) or {}, "state")
         profiles = _string_list(data.get("profiles", []), "profiles")
+        modules = [ModuleSpec.from_dict(x, i) for i, x in enumerate(_list(data.get("modules", []), "modules"))]
         sources = [SourceDeclaration.from_dict(x, i) for i, x in enumerate(_list(data.get("sources", []), "sources"))]
         registry = _list(data.get("registry", []), "registry")
         exports = _list(data.get("exports", []), "exports")
@@ -409,6 +433,7 @@ class Manifest:
             _required_str(data, "version"),
             RuntimeSpec.from_dict(data["runtime"]),
             profiles,
+            modules,
             [DependencySpec.from_dict(x, i) for i, x in enumerate(_list(data.get("dependencies", []), "dependencies"))],
             [InstallStep.from_dict(x, i) for i, x in enumerate(_list(data.get("install", []), "install"))],
             [FileMapping.from_dict(x, i) for i, x in enumerate(_list(data.get("filesystem", []), "filesystem"))],
@@ -431,6 +456,7 @@ class Manifest:
             "version": self.version,
             "runtime": self.runtime.to_dict(),
             "profiles": self.profiles,
+            "modules": [x.to_dict() for x in self.modules],
             "sources": [x.to_dict() for x in self.sources],
             "dependencies": [x.to_dict() for x in self.dependencies],
             "install": [x.to_dict() for x in self.install],

@@ -171,6 +171,16 @@ def _wine_path_for_container_path(path: str) -> str:
     return normalized.replace("/", "\\")
 
 
+
+def _ps_single_quote(value: str) -> str:
+    """Quote a literal value for a PowerShell single-quoted string."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _choco_command_script(command: str, args: list[str]) -> str:
+    ps_args = ", ".join(_ps_single_quote(arg) for arg in [command, *args])
+    return "$ErrorActionPreference = 'Stop'; $chocoArgs = @(" + ps_args + "); & choco @chocoArgs"
+
 def _cmd_quote_arg(value: str) -> str:
     """Quote one argument for the Windows cmd.exe command line."""
     escaped = value.replace('"', '\"')
@@ -396,8 +406,13 @@ def generate_build_script(
             lines.append(f'pushd "{workdir}" >/dev/null')
             lines.append(f'wine cmd /c {_shell_quote(cmd_line)} 2>&1 | while IFS= read -r line; do echo "{indent}$line"; done')
             lines.append('popd >/dev/null')
+        elif step.kind == "choco" and step.command:
+            ps_command = _choco_command_script(step.command, step.args)
+            pwsh_path = f"{prefix}/drive_c/Program Files/PowerShell/7/pwsh.exe"
+            lines.append(f'echo "  Running Chocolatey command: {step.command} {" ".join(step.args)}"')
+            lines.append(f'wine "{pwsh_path}" -NoLogo -NoProfile -ExecutionPolicy Bypass -Command {_shell_quote(ps_command)} 2>&1 | while IFS= read -r line; do echo "{indent}$line"; done')
         elif step.kind == "script" and step.command:
-            lines.append(f'echo "  Running custom script command: {step.command}"')
+            lines.append('echo "  Running custom script command"')
             lines.append(f'eval {step.command} 2>&1 | while IFS= read -r line; do echo "{indent}$line"; done')
 
     if not manifest.install:

@@ -29,6 +29,7 @@ def run_compat_test(
     output_dir: Path | str = "dist",
     workspace: Path | str | None = None,
     graphics: str = "headless",
+    network: str | None = None,
     engine: str | None = None,
     mode: str = "dry-run",
     build_timeout: int = 600,
@@ -124,6 +125,7 @@ def run_compat_test(
             run_plans = _build_run_plans(
                 bundle,
                 graphics=graphics,
+                network=network,
                 engine=engine,
                 entrypoints=requested_entrypoints,
                 run_files=run_files or [],
@@ -191,6 +193,7 @@ def run_compat_test(
         run_plans = _build_run_plans(
             bundle,
             graphics=graphics,
+            network=network,
             engine=engine,
             entrypoints=requested_entrypoints,
             run_files=run_files or [],
@@ -251,6 +254,7 @@ def _build_run_plans(
     bundle: Path,
     *,
     graphics: str,
+    network: str | None,
     engine: str | None,
     entrypoints: list[str],
     run_files: list[Path | str],
@@ -261,6 +265,7 @@ def _build_run_plans(
         return [build_run_plan(
             bundle,
             graphics=graphics,
+            network=network,
             engine=engine,
             files=run_files,
             runner_cache_dir=runner_cache_dir,
@@ -270,6 +275,7 @@ def _build_run_plans(
         build_run_plan(
             bundle,
             graphics=graphics,
+            network=network,
             engine=engine,
             entrypoint=entrypoint,
             files=run_files,

@@ -26,6 +26,7 @@ PREFIX_COPY = "/tmp/winforge-prefix"
 FILE_INPUT_MOUNT_ROOT = "/mnt/winforge-inputs"
 RUNNER_CONTAINER_DIR = "/opt/winforge-runner"
 SUPPORTED_GRAPHICS = {"headless", "vnc"}
+SUPPORTED_NETWORK_MODES = {"none", "bridge", "host"}
 _ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
 
@@ -45,6 +46,7 @@ def build_run_plan(
     files: list[Path | str] | None = None,
     runner_cache_dir: Path | str | None = None,
     require_runner: bool = False,
+    network: str | None = None,
 ) -> dict[str, Any]:
     """Return a deterministic container run plan for a verified bundle."""
     bundle = Path(bundle_path)
@@ -75,6 +77,11 @@ def build_run_plan(
             f"(supported: {', '.join(supported_modes) or 'none'})"
         )
 
+    graph_network = runtime["network"] if "network" in runtime else "none"
+    selected_network = network if network is not None else graph_network
+    _validate_network_mode(selected_network)
+    _validate_graphics_network(mode, selected_network)
+
     image = _runtime_image(runtime)
     launch_command = _launch_command(runtime, launch, [item["winePath"] for item in file_arguments])
     runner_cache = _runner_cache_plan(runtime, runner_cache_dir, require_runner=require_runner, engine=selected_engine)
@@ -99,6 +106,7 @@ def build_run_plan(
         vnc_port=vnc_port,
         novnc_port=novnc_port,
         container_name=container_name,
+        network=selected_network,
         file_mounts=[item["mount"] for item in file_arguments] + ([runner_cache["mount"]] if runner_cache and runner_cache.get("status") == "present" else []),
     )
 
@@ -126,6 +134,7 @@ def build_run_plan(
             "packageVersion": runtime.get("packageVersion"),
             "launcher": runtime.get("launcher"),
             "launcherVersion": runtime.get("launcherVersion"),
+            "network": selected_network,
             "image": image,
             "requiresExactRuntime": bool(
                 (graph.get("compatibility") or {}).get("requiresExactRuntime")
@@ -151,6 +160,7 @@ def build_run_plan(
             "fileMounts": [item["mount"] for item in file_arguments],
             "runnerMount": runner_cache["mount"] if runner_cache and runner_cache.get("status") == "present" else None,
             "environment": environment,
+            "network": selected_network,
             "script": script,
             "argv": argv,
         },
@@ -298,9 +308,10 @@ def _container_argv(
     vnc_port: int,
     novnc_port: int,
     container_name: str | None,
+    network: str,
     file_mounts: list[str] | None = None,
 ) -> list[str]:
-    argv = [engine, "run", "--rm"]
+    argv = [engine, "run", "--rm", "--net", network]
     if container_name:
         argv.extend(["--name", container_name])
     argv.extend(["-v", _volume_mount(bundle, BUNDLE_MOUNT, engine=engine, read_only=True)])
@@ -313,6 +324,20 @@ def _container_argv(
         argv.extend(["-p", f"127.0.0.1:{novnc_port}:6080"])
     argv.extend([image, "bash", "-lc", script])
     return argv
+
+
+def _validate_network_mode(network: str) -> None:
+    if network not in SUPPORTED_NETWORK_MODES:
+        allowed = ", ".join(sorted(SUPPORTED_NETWORK_MODES))
+        raise RunError(f"network mode {network!r} must be one of: {allowed}")
+
+
+def _validate_graphics_network(graphics: str, network: str) -> None:
+    if graphics == "vnc" and network != "bridge":
+        raise RunError(
+            "graphics vnc requires network bridge for loopback-only VNC/noVNC "
+            "port publishing; use --network bridge"
+        )
 
 
 def _container_environment(graphics: str) -> dict[str, str]:

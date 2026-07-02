@@ -1,0 +1,79 @@
+schemaVersion: winforge.app/v0
+name: powershell-wrapper-pwsh-vnc
+version: "0.1.0"
+
+runtime:
+  provider: wine
+  version: latest
+
+sources:
+  - id: powershell-wrapper-for-wine
+    type: other
+    url: https://codeberg.org/Synchro/powershell-wrapper-for-wine.git
+    policy: redistributable
+    description: Open-source PowerShell wrapper for Wine; built from source into Wine's powershell.exe shim.
+
+# PowerShell Core provides pwsh.exe. The wrapper replaces Wine's legacy
+# powershell.exe path and forwards legacy powershell.exe invocations into pwsh.exe.
+dependencies:
+  - kind: winetricks
+    verbs:
+      - powershell_core
+
+install:
+  - kind: script
+    command: set -eu; wrapper="$WINEPREFIX/drive_c/windows/system32/WindowsPowerShell/v1.0/powershell.exe"; profile="$WINEPREFIX/drive_c/Program Files/PowerShell/7/profile.ps1"; if [ -f "$wrapper" ] && [ -f "$profile" ]; then exit 0; fi; command -v git >/dev/null; command -v cargo >/dev/null; if command -v rustup >/dev/null; then rustup target add x86_64-pc-windows-gnu; fi; repo="$WINEPREFIX/drive_c/winforge/powershell-wrapper-for-wine"; rm -rf "$repo"; mkdir -p "$(dirname "$repo")"; git clone --depth=1 https://codeberg.org/Synchro/powershell-wrapper-for-wine.git "$repo"; cd "$repo"; cargo run --package xtask -- build --arch 64; mkdir -p "$WINEPREFIX/drive_c/windows/system32/WindowsPowerShell/v1.0" "$WINEPREFIX/drive_c/Program Files/PowerShell/7"; cp powershell64.exe "$wrapper"; cp wrapper/src/profile.ps1 "$profile"
+
+compatibility:
+  arch: win64
+  windowsVersion: win10
+  graphics:
+    backend: wined3d
+  env:
+    WINEDEBUG: "-all"
+
+launch:
+  entrypoint: C:/Program Files/PowerShell/7/pwsh.exe
+  args:
+    - -NoLogo
+    - -NoExit
+  env:
+    NO_COLOR: "1"
+    POWERSHELL_UPDATECHECK: Off
+  workingDirectory: C:/users/winforge
+
+entrypoints:
+  - id: pwsh
+    name: PowerShell Core
+    executable: C:/Program Files/PowerShell/7/pwsh.exe
+    args:
+      - -NoLogo
+      - -NoExit
+    env:
+      NO_COLOR: "1"
+      POWERSHELL_UPDATECHECK: Off
+    workingDirectory: C:/users/winforge
+  - id: powershell-wrapper
+    name: powershell.exe wrapper forwarding to pwsh
+    executable: C:/windows/system32/WindowsPowerShell/v1.0/powershell.exe
+    args:
+      - -NoLogo
+      - -NoExit
+    env:
+      NO_COLOR: "1"
+      POWERSHELL_UPDATECHECK: Off
+    workingDirectory: C:/users/winforge
+
+state:
+  persistence: persistent
+
+exports:
+  - name: powershell-profile
+    path: C:/Program Files/PowerShell/7/profile.ps1
+  - name: wrapper-source
+    path: C:/winforge/powershell-wrapper-for-wine
+
+provenance:
+  sources:
+    - uri: https://codeberg.org/Synchro/powershell-wrapper-for-wine.git
+      note: Build recipe clones this source repository during the install phase.

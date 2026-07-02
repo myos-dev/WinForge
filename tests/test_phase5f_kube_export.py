@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from copy import deepcopy
 
 from artifact.bundle import create_bundle
 from artifact.kube import (
@@ -38,8 +39,11 @@ DIGEST_IMAGE = "ghcr.io/acme/winforge-app-kube-demo@sha256:abcdef1234567890"
 TAG_IMAGE = "ghcr.io/acme/winforge-app-kube-demo:2.1.0"
 
 
-def _bundle(tmp: str | Path) -> Path:
-    return create_bundle(Manifest.from_dict(APP), Path(tmp), dry_run=True)
+def _bundle(tmp: str | Path, *, network: str | None = None) -> Path:
+    data = deepcopy(APP)
+    if network is not None:
+        data["runtime"]["network"] = network
+    return create_bundle(Manifest.from_dict(data), Path(tmp), dry_run=True)
 
 
 class KubeExportPlanTests(unittest.TestCase):
@@ -66,8 +70,18 @@ class KubeExportPlanTests(unittest.TestCase):
         self.assertEqual(kinds, [
             ("PersistentVolumeClaim", "custom-demo-state"),
             ("PersistentVolumeClaim", "custom-demo-exports"),
+            ("NetworkPolicy", "custom-demo-deny-egress"),
             ("Deployment", "custom-demo"),
         ])
+        self.assertEqual(plan["network"]["mode"], "none")
+        policy_index = next(i for i, resource in enumerate(plan["resources"]) if resource["kind"] == "NetworkPolicy")
+        deployment_index = next(i for i, resource in enumerate(plan["resources"]) if resource["kind"] == "Deployment")
+        self.assertLess(policy_index, deployment_index)
+        deployment = next(resource for resource in plan["resources"] if resource["kind"] == "Deployment")
+        policy = next(resource for resource in plan["resources"] if resource["kind"] == "NetworkPolicy")
+        self.assertFalse(deployment["spec"]["template"]["spec"]["hostNetwork"])
+        self.assertEqual(policy["spec"]["policyTypes"], ["Egress"])
+        self.assertEqual(policy["spec"]["egress"], [])
         yaml_text = plan["manifestYaml"]
         self.assertIn("kind: Deployment", yaml_text)
         self.assertIn(f"image: {DIGEST_IMAGE}", yaml_text)
@@ -79,6 +93,48 @@ class KubeExportPlanTests(unittest.TestCase):
         self.assertIn("io.winforge.schema: winforge.artifact-image/v0", yaml_text)
         self.assertIn("storage: 5Gi", yaml_text)
         self.assertIn("storage: 1Gi", yaml_text)
+        self.assertIn("hostNetwork: false", yaml_text)
+        self.assertIn("kind: NetworkPolicy", yaml_text)
+        self.assertIn("policyTypes:", yaml_text)
+        self.assertIn("egress: []", yaml_text)
+
+
+    def test_create_kube_export_plan_uses_host_network_when_bundle_requests_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle = _bundle(tmp, network="host")
+            plan = create_kube_export_plan(bundle, image=DIGEST_IMAGE)
+
+        self.assertEqual(plan["network"]["mode"], "host")
+        kinds = [resource["kind"] for resource in plan["resources"]]
+        self.assertEqual(kinds, ["PersistentVolumeClaim", "PersistentVolumeClaim", "Deployment"])
+        deployment = next(resource for resource in plan["resources"] if resource["kind"] == "Deployment")
+        self.assertTrue(deployment["spec"]["template"]["spec"]["hostNetwork"])
+        self.assertNotIn("NetworkPolicy", plan["manifestYaml"])
+        self.assertIn("hostNetwork: true", plan["manifestYaml"])
+
+
+    def test_create_kube_export_plan_uses_normal_pod_network_for_bridge_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle = _bundle(tmp, network="bridge")
+            plan = create_kube_export_plan(bundle, image=DIGEST_IMAGE)
+
+        self.assertEqual(plan["network"], {"mode": "bridge", "hostNetwork": False, "denyEgress": False})
+        kinds = [resource["kind"] for resource in plan["resources"]]
+        self.assertEqual(kinds, ["PersistentVolumeClaim", "PersistentVolumeClaim", "Deployment"])
+        deployment = next(resource for resource in plan["resources"] if resource["kind"] == "Deployment")
+        self.assertFalse(deployment["spec"]["template"]["spec"]["hostNetwork"])
+        self.assertNotIn("NetworkPolicy", plan["manifestYaml"])
+
+    def test_create_kube_export_plan_rejects_invalid_network_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle = _bundle(tmp)
+            graph_path = bundle / "metadata" / "graph.json"
+            graph = json.loads(graph_path.read_text(encoding="utf-8"))
+            graph["runnerRuntime"]["network"] = "internet"
+            graph_path.write_text(json.dumps(graph), encoding="utf-8")
+
+            with self.assertRaisesRegex(KubeExportError, "runnerRuntime.network"):
+                create_kube_export_plan(bundle, image=DIGEST_IMAGE)
 
     def test_create_kube_export_plan_rejects_mutable_tag_by_default(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -100,7 +156,7 @@ class KubeExportPlanTests(unittest.TestCase):
         self.assertFalse(plan["image"]["digestPinned"])
         self.assertTrue(plan["image"]["mutableTagAllowed"])
         kinds = [resource["kind"] for resource in plan["resources"]]
-        self.assertEqual(kinds, ["Deployment"])
+        self.assertEqual(kinds, ["NetworkPolicy", "Deployment"])
         self.assertIn("emptyDir: {}", plan["manifestYaml"])
         self.assertNotIn("PersistentVolumeClaim", plan["manifestYaml"])
 

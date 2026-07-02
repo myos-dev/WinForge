@@ -1,0 +1,40 @@
+schemaVersion: winforge.app/v0
+name: chocolatey-firefox
+version: "0.1.0"
+
+runtime:
+  provider: wine
+  version: latest
+
+# BlueBuild-style module declaration, patterned after myOS `type: dnf` layers.
+# The module handles pwsh, powershell-wrapper-for-wine, Chocolatey bootstrap,
+# and then installs the requested packages during the online build phase.
+modules:
+  - type: chocolatey
+    install:
+      packages:
+        - firefox
+
+compatibility:
+  arch: win64
+  windowsVersion: win10
+  graphics:
+    backend: wined3d
+  env:
+    WINEDEBUG: "-all"
+
+launch:
+  entrypoint: C:/Program Files/Mozilla Firefox/firefox.exe
+
+entrypoints:
+  - id: firefox
+    name: Firefox installed through Chocolatey
+    executable: C:/Program Files/Mozilla Firefox/firefox.exe
+
+state:
+  persistence: persistent
+
+provenance:
+  sources:
+    - uri: https://community.chocolatey.org/packages/firefox
+      note: Chocolatey package installed during the online WinForge build phase.
