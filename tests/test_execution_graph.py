@@ -46,7 +46,12 @@ class ExecutionGraphTests(unittest.TestCase):
         self.assertEqual(graph["builderRuntime"]["provider"], "wine")
         self.assertEqual(graph["builderRuntime"]["version"], "9.0")
         self.assertEqual(graph["builderRuntime"]["image"], "ghcr.io/myos-dev/winforge-wine:9.0")
-        self.assertEqual(graph["runnerRuntime"], graph["builderRuntime"])
+        self.assertNotIn("network", graph["builderRuntime"])
+        self.assertEqual(graph["runnerRuntime"]["network"], "none")
+        self.assertEqual(
+            {k: v for k, v in graph["runnerRuntime"].items() if k != "network"},
+            graph["builderRuntime"],
+        )
         self.assertEqual(graph["graphics"]["defaultMode"], "headless")
         self.assertEqual(graph["graphics"]["supportedModes"], ["headless", "vnc"])
         self.assertEqual(graph["launch"]["entrypoint"], "C:/Program Files/App/App.exe")

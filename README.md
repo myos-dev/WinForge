@@ -129,7 +129,7 @@ winforge artifacts resolve notepad-plus-plus
 # Preview and run the built application artifact by app name or bundle path
 winforge run --dry-run --graphics headless notepad-plus-plus
 winforge run --graphics headless notepad-plus-plus
-winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/notepad-plus-plus-8.6.0
+winforge run --graphics vnc --network bridge --vnc-port 5900 --novnc-port 6080 dist/notepad-plus-plus-8.6.0
 
 # Export a runnable application OCI image by app name or bundle path
 winforge export oci notepad-plus-plus \
@@ -396,8 +396,8 @@ winforge run --dry-run --graphics headless dist/my-app-1.0.0
 winforge run --graphics headless dist/my-app-1.0.0 \
   --runner-cache-dir "$HOME/winforge-runners"
 
-# Visible execution with loopback-only VNC and noVNC/websockify ports
-winforge run --graphics vnc --vnc-port 5900 --novnc-port 6080 dist/my-app-1.0.0
+# Visible execution with bridge networking and host-loopback-published VNC/noVNC ports
+winforge run --graphics vnc --network bridge --vnc-port 5900 --novnc-port 6080 dist/my-app-1.0.0
 ```
 
 For v0, the bundle is mounted read-only at `/opt/winforge/bundle`; the prefix

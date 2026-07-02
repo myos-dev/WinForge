@@ -96,6 +96,7 @@ class Phase3ExecutionPlanTests(unittest.TestCase):
                 bundle,
                 graphics="vnc",
                 engine="docker",
+                network="bridge",
                 vnc_port=5901,
                 novnc_port=6081,
             )

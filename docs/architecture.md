@@ -87,7 +87,7 @@ Real build/run execution keeps runner archives host-cached but container-execute
 
 ### 12. Run planning and execution
 
-`runtime/launcher.py` implements the current `winforge run` path. It consumes verified bundle output, emits `winforge.run-plan/v0` for dry runs, and executes the plan with Podman/Docker when not in dry-run mode. Headless mode uses Xvfb without host ports; VNC mode exposes loopback-only VNC/noVNC ports and starts `x11vnc` plus `websockify` inside the runtime container. Bundles are mounted read-only and prefixes are copied before launch so runtime mutation affects state, not the sealed artifact. If a graph requests `runtime.runner`, run planning records runner cache status and real execution requires a populated cache so the selected Wine runner can be mounted into the container.
+`runtime/launcher.py` implements the current `winforge run` path. It consumes verified bundle output, emits `winforge.run-plan/v0` for dry runs, and executes the plan with Podman/Docker when not in dry-run mode. Headless mode uses Xvfb without host ports; VNC mode requires `--network bridge`, uses Docker/Podman host port publishing for loopback-bound VNC/noVNC access, and starts `x11vnc` plus `websockify` inside the runtime container. Bundles are mounted read-only and prefixes are copied before launch so runtime mutation affects state, not the sealed artifact. If a graph requests `runtime.runner`, run planning records runner cache status and real execution requires a populated cache so the selected Wine runner can be mounted into the container.
 
 ### 13. OCI application export
 

@@ -15,6 +15,7 @@ LEGACY_SCHEMA_VERSION = "winforge.dev/v0"
 SUPPORTED_SCHEMA_VERSIONS = {SCHEMA_VERSION, LEGACY_SCHEMA_VERSION}
 
 ALLOWED_RUNTIME_PROVIDERS = {"wine", "staging", "umu-proton-ge"}
+ALLOWED_RUNTIME_NETWORK_MODES = {"none", "bridge", "host"}
 ALLOWED_DEPENDENCY_KINDS = {"winetricks", "font", "directx", "package", "runtime-component"}
 ALLOWED_INSTALL_KINDS = {"msi", "exe", "portable", "choco", "script", "bat", "cmd"}
 
@@ -38,7 +39,7 @@ ROOT_FIELDS = {
     "exports",
     "provenance",
 }
-RUNTIME_FIELDS = {"provider", "version", "source", "channel", "digest", "runner"}
+RUNTIME_FIELDS = {"provider", "version", "source", "channel", "digest", "runner", "network"}
 DEPENDENCY_FIELDS = {"kind", "verbs", "name", "version", "sha256"}
 INSTALL_FIELDS = {"kind", "source", "sha256", "target", "command", "args", "workingDirectory"}
 FILESYSTEM_FIELDS = {"source", "target", "sha256", "mode"}
@@ -63,6 +64,7 @@ class RuntimeSpec:
     channel: str | None = None
     digest: str | None = None
     runner: str | None = None
+    network: str = "none"
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]):
@@ -71,6 +73,9 @@ class RuntimeSpec:
         version = _required_str(data, "runtime.version")
         if provider not in ALLOWED_RUNTIME_PROVIDERS:
             raise ManifestError("runtime.provider must be one of: " + ", ".join(sorted(ALLOWED_RUNTIME_PROVIDERS)))
+        network = _optional_str(data, "network") or "none"
+        if network not in ALLOWED_RUNTIME_NETWORK_MODES:
+            raise ManifestError("runtime.network must be one of: " + ", ".join(sorted(ALLOWED_RUNTIME_NETWORK_MODES)))
         return cls(
             provider,
             version,
@@ -78,6 +83,7 @@ class RuntimeSpec:
             _optional_str(data, "channel"),
             _optional_str(data, "digest"),
             _optional_str(data, "runner"),
+            network,
         )
 
     def to_dict(self):
@@ -88,6 +94,7 @@ class RuntimeSpec:
             "channel": self.channel,
             "digest": self.digest,
             "runner": self.runner,
+            "network": self.network,
         })
 
 

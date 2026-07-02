@@ -112,7 +112,8 @@ Candidate CLI:
 winforge debug installer <bundle> \
   --media <path> \
   --command "setup.exe /config ProPlus.WW/config.xml" \
-  --graphics vnc
+  --graphics vnc \
+  --network bridge
 ```
 
 Likely files:

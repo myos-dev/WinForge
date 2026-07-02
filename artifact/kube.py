@@ -13,6 +13,7 @@ from artifact.inspection import verify_bundle
 from artifact.oci import ARTIFACT_IMAGE_SCHEMA_VERSION, EXPORTS_ROOT, STATE_ROOT
 
 KUBE_EXPORT_SCHEMA_VERSION = 'winforge.kube-export/v0'
+SUPPORTED_NETWORK_MODES = {'none', 'bridge', 'host'}
 
 
 class KubeExportError(RuntimeError):
@@ -51,11 +52,14 @@ def create_kube_export_plan(
     resource_name = _k8s_name(name or app_name)
     labels = _labels(resource_name, app_name, app_version)
     annotations = _annotations(app_name, app_version, image)
+    network_mode = _network_mode(graph)
 
     resources: list[dict[str, Any]] = []
     if not no_pvc:
         resources.append(_pvc(f'{resource_name}-state', namespace, labels, annotations, state_size))
         resources.append(_pvc(f'{resource_name}-exports', namespace, labels, annotations, exports_size))
+    if network_mode == 'none':
+        resources.append(_deny_egress_policy(f'{resource_name}-deny-egress', namespace, labels, annotations))
     resources.append(_deployment(
         name=resource_name,
         namespace=namespace,
@@ -65,6 +69,7 @@ def create_kube_export_plan(
         no_pvc=no_pvc,
         replicas=replicas,
         graphics=graphics,
+        network=network_mode,
     ))
     manifest_yaml = render_kube_yaml(resources)
 
@@ -80,6 +85,11 @@ def create_kube_export_plan(
         'namespace': namespace,
         'name': resource_name,
         'replicas': replicas,
+        'network': {
+            'mode': network_mode,
+            'hostNetwork': network_mode == 'host',
+            'denyEgress': network_mode == 'none',
+        },
         'state': {
             'enabled': True,
             'persistent': not no_pvc,
@@ -184,6 +194,7 @@ def _deployment(
     no_pvc: bool,
     replicas: int,
     graphics: str,
+    network: str,
 ) -> dict[str, Any]:
     state_volume = {'name': 'winforge-state'}
     exports_volume = {'name': 'winforge-exports'}
@@ -216,6 +227,7 @@ def _deployment(
                     'annotations': annotations,
                 },
                 'spec': {
+                    'hostNetwork': network == 'host',
                     'containers': [
                         {
                             'name': 'winforge-app',
@@ -235,6 +247,33 @@ def _deployment(
                     'volumes': [state_volume, exports_volume],
                 },
             },
+        },
+    }
+
+
+def _deny_egress_policy(
+    name: str,
+    namespace: str,
+    labels: dict[str, str],
+    annotations: dict[str, str],
+) -> dict[str, Any]:
+    return {
+        'apiVersion': 'networking.k8s.io/v1',
+        'kind': 'NetworkPolicy',
+        'metadata': {
+            'name': name,
+            'namespace': namespace,
+            'labels': labels,
+            'annotations': annotations,
+        },
+        'spec': {
+            'podSelector': {
+                'matchLabels': {
+                    'app.kubernetes.io/instance': labels['app.kubernetes.io/instance'],
+                },
+            },
+            'policyTypes': ['Egress'],
+            'egress': [],
         },
     }
 
@@ -273,6 +312,15 @@ def _is_digest_pinned(image: str) -> bool:
     return '@sha256:' in image and bool(image.split('@sha256:', 1)[1])
 
 
+def _network_mode(graph: dict[str, Any]) -> str:
+    runtime = graph.get('runnerRuntime') or {}
+    network = runtime['network'] if 'network' in runtime else 'none'
+    if not isinstance(network, str) or network not in SUPPORTED_NETWORK_MODES:
+        allowed = ', '.join(sorted(SUPPORTED_NETWORK_MODES))
+        raise KubeExportError(f'bundle graph runnerRuntime.network must be one of: {allowed}')
+    return network
+
+
 def _k8s_name(value: str) -> str:
     name = re.sub(r'[^a-z0-9-]+', '-', value.lower()).strip('-')
     name = re.sub(r'-+', '-', name)[:63].strip('-')
@@ -309,6 +357,8 @@ def _emit_yaml(value: Any, lines: list[str], indent: int) -> None:
         for key, item in value.items():
             if item == {}:
                 lines.append(f'{prefix}{key}: {{}}')
+            elif item == []:
+                lines.append(f'{prefix}{key}: []')
             elif isinstance(item, (dict, list)):
                 lines.append(f'{prefix}{key}:')
                 _emit_yaml(item, lines, indent + 2)
@@ -325,6 +375,8 @@ def _emit_yaml(value: Any, lines: list[str], indent: int) -> None:
                     if first:
                         if nested == {}:
                             lines.append(f'{prefix}- {key}: {{}}')
+                        elif nested == []:
+                            lines.append(f'{prefix}- {key}: []')
                         elif isinstance(nested, (dict, list)):
                             lines.append(f'{prefix}- {key}:')
                             _emit_yaml(nested, lines, indent + 4)
@@ -334,6 +386,8 @@ def _emit_yaml(value: Any, lines: list[str], indent: int) -> None:
                     else:
                         if nested == {}:
                             lines.append(f'{prefix}  {key}: {{}}')
+                        elif nested == []:
+                            lines.append(f'{prefix}  {key}: []')
                         elif isinstance(nested, (dict, list)):
                             lines.append(f'{prefix}  {key}:')
                             _emit_yaml(nested, lines, indent + 4)

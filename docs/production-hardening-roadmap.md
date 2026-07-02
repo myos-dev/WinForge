@@ -1,6 +1,6 @@
 # WinForge Production Hardening Roadmap
 
-Status: proposed
+Status: partially implemented — runtime network isolation implemented; Chocolatey/module work proposed
 Date: 2026-07-02
 
 ## Objective
@@ -15,7 +15,7 @@ These changes are independent of the [legacy-installer-debugging-backlog](legacy
 
 ### Problem
 
-Runtime containers currently inherit default bridge networking. A deployed Win32 application inside Wine can reach the internet, scan the LAN, or beacon out — undermining the air-gapped security model that makes legacy-Wine-in-containers attractive.
+Without explicit runtime network isolation, a deployed Win32 application inside Wine can reach the internet, scan the LAN, or beacon out — undermining the air-gapped security model that makes legacy-Wine-in-containers attractive.
 
 ### Design
 
@@ -26,29 +26,31 @@ Runtime containers currently inherit default bridge networking. A deployed Win32
 
 ### Escape hatch
 
-Some runtime scenarios need local connectivity (host database, local printer service). Two mechanisms:
+Some runtime scenarios need local connectivity (host database, local printer service), or interactive VNC/noVNC access. Two mechanisms:
 
 1. **CLI flag** — `winforge run my-app --network host|bridge|none`
 2. **Manifest field** — `runtime.network` recorded in bundle graph metadata so intent survives packaging
 
-The manifest field captures *intent*; the CLI flag allows the operator to *override* at deployment time for extra hardening.
+The manifest field captures *intent*; the CLI flag allows the operator to *override* at deployment time for extra hardening. Bundle verification requires `manifest.runtime.network` to match `metadata/graph.json` `runnerRuntime.network` so graph tampering cannot silently escalate a default air-gapped bundle to host networking. Local VNC/noVNC runs are intentionally limited to `--network bridge` so Docker/Podman host-port publishing can bind access to loopback; the VNC helpers still listen inside the container, so bridge-mode VNC should not be attached to an untrusted/shared container network. `none` is non-interactive air-gap mode and `host` is rejected for VNC.
 
-### Changes required
+### Implemented changes
 
 | File | Change |
 |---|---|
 | `core/manifest.py` | Add `network` field to `RuntimeSpec` (default: `"none"`) |
-| `runtime/launcher.py` | `_container_argv()` emits `--net=none` by default, reads overrides |
-| `builder/pipeline.py` | Carry `network` into `metadata/graph.json` |
+| `runtime/launcher.py` | `_container_argv()` emits `--net none` by default, reads overrides |
+| `artifact/graph.py` | Carries `network` into `metadata/graph.json` under `runnerRuntime.network` |
 | `artifact/kube.py` | Set `hostNetwork` or emit `NetworkPolicy` based on graph metadata |
 | `winforge/cli.py` | `winforge run --network <mode>` flag |
 
-### Acceptance criteria
+### Implemented acceptance criteria
 
-- `winforge run my-app` starts container with `--net=none` by default
-- `winforge run my-app --network host` uses host networking
+- `winforge run my-app` starts container with `--net none` by default
+- `winforge run my-app --network host` uses host networking for headless runs
+- `winforge run my-app --graphics vnc --network bridge` keeps host-published VNC/noVNC access loopback-bound
+- VNC with `network: none` or `network: host` is rejected instead of producing a broken or exposed plan
 - Bundle graph records `network: "none"` for default builds
-- `winforge export kube` emits appropriate network config
+- `winforge export kube` emits appropriate network config, with deny-egress policy for `network: none` when the cluster CNI enforces NetworkPolicy
 - Existing build containers are unaffected (keep default networking)
 
 ---
@@ -174,11 +176,11 @@ Once Themes 1 and 2 are complete, WinForge's architecture matches the Gemini-des
 
 | Order | Theme | Effort | Dependencies | Delivers |
 |---|---|---|---|---|
-| 1 | Runtime `--net=none` default | Small (1–2 files + tests) | None | Immediate security hardening |
-| 2 | Chocolatey profile + `kind: choco` handler | Medium (profiles + pipeline + tests) | None | Recipe authors can use choco today |
-| 3 | Network escape hatch (manifest field + CLI flag) | Small (manifest + launcher + kube) | Theme 1 (parallel ok) | Overridable isolation |
-| 4 | First-class module system | Medium (schema + resolver) | Theme 2 proves the pattern | Cleaner abstraction |
-| 5 | Pre-baked chocolatey runtime image | Medium (Dockerfile + CI + GHCR push) | Theme 2 | Faster builds |
+| 1 | Runtime `--net none` default | Small (1–2 files + tests) | None | Implemented — immediate security hardening |
+| 2 | Chocolatey profile + `kind: choco` handler | Medium (profiles + pipeline + tests) | None | Proposed — recipe authors can use choco today |
+| 3 | Network escape hatch (manifest field + CLI flag) | Small (manifest + launcher + kube) | Theme 1 (parallel ok) | Implemented — overridable isolation |
+| 4 | First-class module system | Medium (schema + resolver) | Theme 2 proves the pattern | Proposed — cleaner abstraction |
+| 5 | Pre-baked chocolatey runtime image | Medium (Dockerfile + CI + GHCR push) | Theme 2 | Proposed — faster builds |
 
 ## Review triggers
 

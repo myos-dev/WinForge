@@ -14,6 +14,7 @@ GRAPH_SCHEMA_VERSION = "winforge.execution-graph/v0"
 MANIFEST_SCHEMA_VERSIONS = {"winforge.app/v0", "winforge.dev/v0"}
 INSPECTION_SCHEMA_VERSION = "winforge.bundle-inspection/v0"
 VERIFICATION_SCHEMA_VERSION = "winforge.bundle-verification/v0"
+SUPPORTED_NETWORK_MODES = {"none", "bridge", "host"}
 
 REQUIRED_FILES = [
     "manifest.winforge.json",
@@ -212,6 +213,28 @@ def verify_bundle(bundle_path: Path | str) -> dict[str, Any]:
             "runnerRuntime": runner_pair,
         },
         error="runtime.json must match graph builderRuntime and runnerRuntime provider/version",
+    )
+
+    manifest_runtime = manifest.get("runtime") if isinstance(manifest.get("runtime"), dict) else {}
+    manifest_network = manifest_runtime["network"] if "network" in manifest_runtime else "none"
+    runner_network = graph_runner["network"] if "network" in graph_runner else "none"
+    network_ok = (
+        isinstance(manifest_network, str)
+        and isinstance(runner_network, str)
+        and manifest_network in SUPPORTED_NETWORK_MODES
+        and runner_network in SUPPORTED_NETWORK_MODES
+        and manifest_network == runner_network
+    )
+    add_check(
+        "runtime-network-match",
+        network_ok,
+        "manifest runtime.network matches graph runnerRuntime.network",
+        details={
+            "manifestRuntimeNetwork": manifest_network,
+            "runnerRuntimeNetwork": runner_network,
+            "allowed": sorted(SUPPORTED_NETWORK_MODES),
+        },
+        error="manifest runtime.network must match graph runnerRuntime.network and use a supported mode",
     )
 
     graph_launch = graph.get("launch", {})

@@ -62,6 +62,8 @@ class PowershellWrapperExampleTests(unittest.TestCase):
                     "vnc",
                     "--engine",
                     "docker",
+                    "--network",
+                    "bridge",
                     "--vnc-port",
                     "5901",
                     "--novnc-port",
@@ -76,6 +78,7 @@ class PowershellWrapperExampleTests(unittest.TestCase):
 
         self.assertEqual(run_plan["schemaVersion"], "winforge.run-plan/v0")
         self.assertEqual(run_plan["graphics"]["mode"], "vnc")
+        self.assertEqual(run_plan["runtime"]["network"], "bridge")
         self.assertEqual(run_plan["selectedEntrypoint"]["id"], "default")
         self.assertEqual(
             run_plan["launchCommand"],
