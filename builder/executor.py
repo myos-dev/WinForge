@@ -167,20 +167,26 @@ def _resolve_image_ref(manifest: Manifest, engine: str) -> str | None:
 
     Resolution is catalog-backed:
       1. Prefer a local developer image if it exists.
-      2. Accept an already-local published GHCR tag if it exists.
-      3. Pull the published GHCR tag from the catalog.
+      2. Pull the published GHCR tag so mutable catalog tags such as
+         ghcr.io/myos-dev/winforge-wine:11.0 refresh after CI rebuilds.
+      3. Fall back to an already-local published tag when offline.
     Returns the image ref, or None if unresolvable.
     """
     binding = resolve_runtime(manifest.runtime)
-    candidates = [
-        ref for ref in [binding.local_oci_image, binding.oci_image]
-        if ref
-    ]
-    for ref in candidates:
-        if _check_image(ref, engine):
-            return ref
-    if binding.oci_image and _pull_image(binding.oci_image, engine):
-        return binding.oci_image
+
+    # Local developer images are explicit overrides and should keep working
+    # without network access.
+    if binding.local_oci_image and _check_image(binding.local_oci_image, engine):
+        return binding.local_oci_image
+
+    # Published catalog tags are mutable: CI can rebuild the same runtime tag
+    # after Dockerfile changes. Pull before trusting a cached local copy so
+    # machines don't keep running stale images missing newly added tooling.
+    if binding.oci_image:
+        if _pull_image(binding.oci_image, engine):
+            return binding.oci_image
+        if _check_image(binding.oci_image, engine):
+            return binding.oci_image
     return None
 
 

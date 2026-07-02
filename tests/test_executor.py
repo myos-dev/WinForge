@@ -3,6 +3,7 @@ from __future__ import annotations
 import io, json, os, stat, tempfile, unittest
 from unittest.mock import patch
 from pathlib import Path
+from types import SimpleNamespace
 
 from artifact.bundle import create_bundle
 from builder.pipeline import build_plan, generate_build_script
@@ -311,6 +312,57 @@ class EngineDetectionTests(unittest.TestCase):
             self.assertFalse(result)
         except FileNotFoundError:
             pass  # Docker not installed — acceptable
+
+    def test_resolve_image_prefers_local_developer_image_without_pull(self):
+        """Local runtime images are explicit developer overrides."""
+        binding = SimpleNamespace(
+            local_oci_image="winforge/wine:11.0",
+            oci_image="ghcr.io/myos-dev/winforge-wine:11.0",
+        )
+        manifest = SimpleNamespace(runtime=SimpleNamespace(provider="wine", version="11.0"))
+
+        with patch("builder.executor.resolve_runtime", return_value=binding),              patch("builder.executor._check_image", return_value=True) as check,              patch("builder.executor._pull_image") as pull:
+            result = _resolve_image_ref(manifest, "podman")
+
+        self.assertEqual(result, "winforge/wine:11.0")
+        check.assert_called_once_with("winforge/wine:11.0", "podman")
+        pull.assert_not_called()
+
+    def test_resolve_image_pulls_published_tag_before_cached_copy(self):
+        """Mutable GHCR catalog tags must refresh after CI image rebuilds."""
+        binding = SimpleNamespace(
+            local_oci_image="winforge/wine:11.0",
+            oci_image="ghcr.io/myos-dev/winforge-wine:11.0",
+        )
+        manifest = SimpleNamespace(runtime=SimpleNamespace(provider="wine", version="11.0"))
+
+        def check_image(ref, engine):
+            # Local developer image is absent, but a stale published tag exists.
+            return ref == "ghcr.io/myos-dev/winforge-wine:11.0"
+
+        with patch("builder.executor.resolve_runtime", return_value=binding),              patch("builder.executor._check_image", side_effect=check_image) as check,              patch("builder.executor._pull_image", return_value=True) as pull:
+            result = _resolve_image_ref(manifest, "podman")
+
+        self.assertEqual(result, "ghcr.io/myos-dev/winforge-wine:11.0")
+        check.assert_called_once_with("winforge/wine:11.0", "podman")
+        pull.assert_called_once_with("ghcr.io/myos-dev/winforge-wine:11.0", "podman")
+
+    def test_resolve_image_can_fallback_to_cached_published_tag_when_pull_fails(self):
+        """Offline users can still use an already-local published runtime image."""
+        binding = SimpleNamespace(
+            local_oci_image="winforge/wine:11.0",
+            oci_image="ghcr.io/myos-dev/winforge-wine:11.0",
+        )
+        manifest = SimpleNamespace(runtime=SimpleNamespace(provider="wine", version="11.0"))
+
+        with patch("builder.executor.resolve_runtime", return_value=binding),              patch("builder.executor._check_image", side_effect=[False, True]) as check,              patch("builder.executor._pull_image", return_value=False) as pull:
+            result = _resolve_image_ref(manifest, "podman")
+
+        self.assertEqual(result, "ghcr.io/myos-dev/winforge-wine:11.0")
+        self.assertEqual(check.call_count, 2)
+        check.assert_any_call("winforge/wine:11.0", "podman")
+        check.assert_any_call("ghcr.io/myos-dev/winforge-wine:11.0", "podman")
+        pull.assert_called_once_with("ghcr.io/myos-dev/winforge-wine:11.0", "podman")
 
 
 class BuildPlanTests(unittest.TestCase):
