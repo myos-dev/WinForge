@@ -1,0 +1,85 @@
+schemaVersion: winforge.app/v0
+name: choco-sandbox
+version: "0.1.0"
+
+runtime:
+  provider: wine
+  version: latest
+
+# Bootstrap Chocolatey without PowerShell —
+# Download the NuGet package, extract it manually, set up choco.exe
+install:
+  - kind: script
+    command: |
+      set -eu
+      CHOCOTEMP=/tmp/choco-bootstrap
+      CHOCOROOT="$WINEPREFIX/drive_c/ProgramData/chocolatey"
+      rm -rf "$CHOCOTEMP" "$CHOCOROOT"
+      mkdir -p "$CHOCOTEMP" "$CHOCOROOT"
+
+      echo "=== Downloading Chocolatey NuGet package ==="
+      curl -fsSL "https://packages.chocolatey.org/chocolatey.0.12.1.nupkg" \
+        -o "$CHOCOTEMP/chocolatey.nupkg"
+
+      echo "=== Extracting ==="
+      cd "$CHOCOTEMP"
+      unzip -q chocolatey.nupkg -d chocolatey-extracted
+
+      echo "=== Installing to Wine prefix ==="
+      cp -r chocolatey-extracted/tools/* "$CHOCOROOT/"
+
+      # Create helper batch script
+      cat > "$WINEPREFIX/drive_c/winforge/run-choco.cmd" << 'CHOCOSCRIPT'
+@echo off
+echo ======================================================
+echo  WinForge Chocolatey Sandbox
+echo ======================================================
+echo.
+echo  Chocolatey is installed at C:\ProgramData\chocolatey
+echo.
+echo  Try:
+echo    choco install notepadplusplus -y --no-progress
+echo    choco install 7zip.install -y --no-progress
+echo    choco list --local-only
+echo.
+echo  NOTE: choco is a .NET app - first run is slow as
+echo  Wine initializes its Mono/.NET runtime.
+echo ======================================================
+echo.
+set PATH=C:\ProgramData\chocolatey\bin;%PATH%
+echo  PATH includes chocolatey\bin
+echo.
+C:\Windows\System32\cmd.exe /k
+CHOCOSCRIPT
+
+      echo "=== Done ==="
+
+compatibility:
+  arch: win64
+  windowsVersion: win10
+  graphics:
+    backend: wined3d
+  env:
+    WINEDEBUG: "-all"
+
+launch:
+  entrypoint: C:/windows/system32/cmd.exe
+  args:
+    - /k
+    - C:/winforge/run-choco.cmd
+
+entrypoints:
+  - id: cmd
+    name: Command Prompt with Chocolatey
+    executable: C:/windows/system32/cmd.exe
+    args:
+      - /k
+      - C:/winforge/run-choco.cmd
+
+state:
+  persistence: persistent
+
+provenance:
+  sources:
+    - uri: https://packages.chocolatey.org/chocolatey.0.12.1.nupkg
+      note: Chocolatey NuGet package extracted manually during build (no PowerShell required)
