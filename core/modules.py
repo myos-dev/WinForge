@@ -32,7 +32,7 @@ CHOCOLATEY_SETUP_COMMAND = (
     'git clone --depth=1 https://codeberg.org/Synchro/powershell-wrapper-for-wine.git "$repo"; '
     '(cd "$repo" && cargo run --package xtask -- build --arch 64); '
     'mkdir -p "$(dirname "$wrapper")"; '
-    'cp "$repo/target/x86_64-pc-windows-gnu/release/powershell64.exe" "$wrapper"; '
+    'cp "$repo"/target/x86_64-pc-windows-gnu/release/*.exe "$wrapper"; '
     'wine "$pwsh" -NoLogo -NoProfile -ExecutionPolicy Bypass -Command '
     '"iex ((New-Object System.Net.WebClient).DownloadString(\'https://community.chocolatey.org/install.ps1\'))"'
 )
